@@ -40,6 +40,18 @@ document.addEventListener('DOMContentLoaded', () => {
     ).join('<span style="color:var(--text-muted);font-size:1.2rem;">&rarr;</span>');
   }
 
+  /* ---------- FIELD COLLECTION HELPERS ---------- */
+  function collectStrategyFields(item) {
+    const fields = {};
+    item.querySelectorAll('.field-row').forEach(row => {
+      const label = row.querySelector('label').textContent;
+      const input = row.querySelector('input, select');
+      const value = input ? (input.value || '(placeholder)') : '(placeholder)';
+      fields[label] = value;
+    });
+    return fields;
+  }
+
   /* ---------- RUN BACKTEST (placeholder logic) ---------- */
   const runBtn = document.getElementById('run-backtest-btn');
   const runStatus = document.getElementById('run-status');
@@ -65,24 +77,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // Placeholder: in production this calls the backend API which runs
     // the calculation and returns/saves an HTML dashboard.
     setTimeout(() => {
+      const globalParams = {
+        'Start Date': document.getElementById('start-date').value,
+        'End Date': document.getElementById('end-date').value,
+        'Risk Free Rate': document.getElementById('risk-free-rate').value
+      };
+
       const specs = selected.map(cb => {
         const item = cb.closest('.strategy-item');
         const strategyName = item.querySelector('span').textContent;
-        const fields = {};
-        item.querySelectorAll('.field-row').forEach(row => {
-          const label = row.querySelector('label').textContent;
-          const value = row.querySelector('input').value || '(placeholder)';
-          fields[label] = value;
-        });
-        return { strategy: strategyName, fields };
+        return { strategy: strategyName, fields: collectStrategyFields(item) };
       });
 
       const backtest = {
         id: Date.now().toString(),
         name,
         createdAt: new Date().toLocaleString(),
+        globalParams,
         specs,
-        dashboardHtml: buildPlaceholderDashboard(name, specs)
+        dashboardHtml: buildPlaceholderDashboard(name, globalParams, specs)
       };
 
       saveBacktest(backtest);
@@ -91,11 +104,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 900);
   });
 
-  function buildPlaceholderDashboard(name, specs) {
+  function buildPlaceholderDashboard(name, globalParams, specs) {
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${name}</title>
     <style>body{font-family:sans-serif;padding:2rem;background:#fff;color:#1b1f27;}
     h1{color:#0f4c81;} .spec{margin-bottom:1rem;padding:1rem;border:1px solid #e3e6ea;border-radius:8px;}</style>
     </head><body><h1>${name}</h1><p>Placeholder results dashboard.</p>
+    <div class="spec"><strong>Global Parameters</strong><br>${Object.entries(globalParams).map(([k,v]) => `${k}: ${v}`).join('<br>')}</div>
     ${specs.map(s => `<div class="spec"><strong>${s.strategy}</strong><br>${Object.entries(s.fields).map(([k,v]) => `${k}: ${v}`).join('<br>')}</div>`).join('')}
     </body></html>`;
   }
@@ -140,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="result-details">
           <dl>
+            ${Object.entries(bt.globalParams || {}).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}
             ${bt.specs.map(s => `<dt>${s.strategy}</dt><dd>${Object.entries(s.fields).map(([k,v]) => `${k}: ${v}`).join(', ')}</dd>`).join('')}
           </dl>
         </div>
@@ -218,15 +233,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fileInput.files.length === 0) return;
     const fileName = fileInput.files[0].name;
     const list = document.getElementById('data-file-list');
-    if (list.querySelector('.placeholder-text')) list.innerHTML = '';
     const row = document.createElement('div');
     row.className = 'data-file-row';
     row.innerHTML = `<span>${fileName}</span><span style="color:var(--text-muted);">(pending backend upload)</span>`;
     list.appendChild(row);
     fileInput.value = '';
+
+    // Placeholder: newly uploaded portfolio CSVs should also appear
+    // as options in the Long/Short Portfolio comboboxes once backend exists.
   });
 
   /* ---------- INITIAL RENDER ---------- */
   renderResults();
 });
-
