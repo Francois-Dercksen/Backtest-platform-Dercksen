@@ -41,25 +41,25 @@
       <div class="formula-card">
         <h2>Alpha</h2>
         <div class="formula">
-          &alpha; = R<sub>p</sub> &minus; [R<sub>f</sub> + &beta;(R<sub>m</sub> &minus; R<sub>f</sub>)]
+          &alpha; = R<sub>p</sub> &minus; R<sub>bm</sub>
         </div>
-        <p class="formula-desc">Excess return of the portfolio relative to the return predicted by the Capital Asset Pricing Model (CAPM), given its beta.</p>
+        <p class="formula-desc">Annualised portfolio return minus the annualised benchmark (SPX) return over the common backtest window.</p>
       </div>
 
       <div class="formula-card">
         <h2>Beta</h2>
         <div class="formula">
-          &beta; = Cov(R<sub>p</sub>, R<sub>m</sub>) / Var(R<sub>m</sub>)
+          &beta; = Cov(R<sub>p</sub>, R<sub>bm</sub>) / Var(R<sub>bm</sub>)
         </div>
-        <p class="formula-desc">Sensitivity of the portfolio's returns to movements in the benchmark market returns.</p>
+        <p class="formula-desc">Sensitivity of the portfolio's period returns to the benchmark's period returns, estimated via the covariance matrix over the aligned sample.</p>
       </div>
 
       <div class="formula-card">
         <h2>Sortino Ratio</h2>
         <div class="formula">
-          Sortino = (R<sub>p</sub> &minus; R<sub>f</sub>) / &sigma;<sub>d</sub>
+          Sortino = R<sub>ann</sub> / &sigma;<sub>downside,ann</sub>
         </div>
-        <p class="formula-desc">Risk-adjusted return using downside deviation (&sigma;<sub>d</sub>) instead of total volatility, penalizing only harmful volatility.</p>
+        <p class="formula-desc">Annualised return divided by annualised downside deviation, where downside deviation only uses periods with negative returns.</p>
       </div>
     </div>
   </section>
@@ -76,6 +76,21 @@
           <input type="text" id="backtest-name" placeholder="e.g. Tech Momentum Q1">
         </div>
 
+        <div class="global-params">
+          <div class="field-row">
+            <label for="start-date">Start Date</label>
+            <input type="text" id="start-date" placeholder="YYYY-MM" value="2005-01">
+          </div>
+          <div class="field-row">
+            <label for="end-date">End Date</label>
+            <input type="text" id="end-date" placeholder="YYYY-MM" value="2025-12">
+          </div>
+          <div class="field-row">
+            <label for="risk-free-rate">Risk Free Rate</label>
+            <input type="text" id="risk-free-rate" placeholder="e.g. 4.5%" value="4.5%">
+          </div>
+        </div>
+
         <div class="strategy-list" id="strategy-list">
 
           <div class="strategy-item" data-strategy="long-portfolio">
@@ -84,10 +99,13 @@
               <span>Long Portfolio</span>
             </label>
             <div class="strategy-fields">
-              <div class="field-row"><label>Universe / Tickers</label><input type="text" placeholder="e.g. AAPL, MSFT, GOOGL"></div>
-              <div class="field-row"><label>Weighting Scheme</label><input type="text" placeholder="Equal weight / custom"></div>
-              <div class="field-row"><label>Start Date</label><input type="text" placeholder="YYYY-MM-DD"></div>
-              <div class="field-row"><label>End Date</label><input type="text" placeholder="YYYY-MM-DD"></div>
+              <div class="field-row">
+                <label>Portfolio</label>
+                <select class="portfolio-select">
+                  <option value="BAM_f7_default" selected>BAM_f7_default</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Weight</label><input type="text" value="100%" placeholder="e.g. 100%"></div>
             </div>
           </div>
 
@@ -97,10 +115,13 @@
               <span>Short Portfolio</span>
             </label>
             <div class="strategy-fields">
-              <div class="field-row"><label>Universe / Tickers</label><input type="text" placeholder="e.g. AAPL, MSFT, GOOGL"></div>
-              <div class="field-row"><label>Borrow Rate</label><input type="text" placeholder="e.g. 1.5%"></div>
-              <div class="field-row"><label>Start Date</label><input type="text" placeholder="YYYY-MM-DD"></div>
-              <div class="field-row"><label>End Date</label><input type="text" placeholder="YYYY-MM-DD"></div>
+              <div class="field-row">
+                <label>Portfolio</label>
+                <select class="portfolio-select">
+                  <option value="BAM_f7_default" selected>BAM_f7_default</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Weight</label><input type="text" value="100%" placeholder="e.g. 100%"></div>
             </div>
           </div>
 
@@ -110,10 +131,20 @@
               <span>Long Call</span>
             </label>
             <div class="strategy-fields">
-              <div class="field-row"><label>Underlying</label><input type="text" placeholder="e.g. SPY"></div>
-              <div class="field-row"><label>Strike</label><input type="text" placeholder="e.g. 450"></div>
-              <div class="field-row"><label>Expiry</label><input type="text" placeholder="YYYY-MM-DD"></div>
-              <div class="field-row"><label>Premium</label><input type="text" placeholder="e.g. 5.20"></div>
+              <div class="field-row">
+                <label>Underlying</label>
+                <select class="underlying-select">
+                  <option value="SPX" selected>SPX</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Strike (% of spot)</label><input type="text" value="100%" placeholder="e.g. 110%"></div>
+              <div class="field-row">
+                <label>Term</label>
+                <select class="term-select">
+                  <option value="365" selected>365-day</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Premium (%)</label><input type="text" placeholder="e.g. 4.19%"></div>
             </div>
           </div>
 
@@ -123,10 +154,20 @@
               <span>Short Call</span>
             </label>
             <div class="strategy-fields">
-              <div class="field-row"><label>Underlying</label><input type="text" placeholder="e.g. SPY"></div>
-              <div class="field-row"><label>Strike</label><input type="text" placeholder="e.g. 450"></div>
-              <div class="field-row"><label>Expiry</label><input type="text" placeholder="YYYY-MM-DD"></div>
-              <div class="field-row"><label>Premium</label><input type="text" placeholder="e.g. 5.20"></div>
+              <div class="field-row">
+                <label>Underlying</label>
+                <select class="underlying-select">
+                  <option value="SPX" selected>SPX</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Strike (% of spot)</label><input type="text" value="100%" placeholder="e.g. 110%"></div>
+              <div class="field-row">
+                <label>Term</label>
+                <select class="term-select">
+                  <option value="365" selected>365-day</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Premium (%)</label><input type="text" placeholder="e.g. 4.19%"></div>
             </div>
           </div>
 
@@ -136,10 +177,20 @@
               <span>Long Put</span>
             </label>
             <div class="strategy-fields">
-              <div class="field-row"><label>Underlying</label><input type="text" placeholder="e.g. SPY"></div>
-              <div class="field-row"><label>Strike</label><input type="text" placeholder="e.g. 420"></div>
-              <div class="field-row"><label>Expiry</label><input type="text" placeholder="YYYY-MM-DD"></div>
-              <div class="field-row"><label>Premium</label><input type="text" placeholder="e.g. 4.10"></div>
+              <div class="field-row">
+                <label>Underlying</label>
+                <select class="underlying-select">
+                  <option value="SPX" selected>SPX</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Strike (% of spot)</label><input type="text" value="90%" placeholder="e.g. 90%"></div>
+              <div class="field-row">
+                <label>Term</label>
+                <select class="term-select">
+                  <option value="365" selected>365-day</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Premium (%)</label><input type="text" value="4.19%" placeholder="e.g. 4.19%"></div>
             </div>
           </div>
 
@@ -149,10 +200,20 @@
               <span>Short Put</span>
             </label>
             <div class="strategy-fields">
-              <div class="field-row"><label>Underlying</label><input type="text" placeholder="e.g. SPY"></div>
-              <div class="field-row"><label>Strike</label><input type="text" placeholder="e.g. 420"></div>
-              <div class="field-row"><label>Expiry</label><input type="text" placeholder="YYYY-MM-DD"></div>
-              <div class="field-row"><label>Premium</label><input type="text" placeholder="e.g. 4.10"></div>
+              <div class="field-row">
+                <label>Underlying</label>
+                <select class="underlying-select">
+                  <option value="SPX" selected>SPX</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Strike (% of spot)</label><input type="text" value="90%" placeholder="e.g. 90%"></div>
+              <div class="field-row">
+                <label>Term</label>
+                <select class="term-select">
+                  <option value="365" selected>365-day</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Premium (%)</label><input type="text" value="4.19%" placeholder="e.g. 4.19%"></div>
             </div>
           </div>
 
@@ -190,7 +251,9 @@
       <div class="data-card">
         <h2>Available Data Files</h2>
         <div id="data-file-list" class="data-file-list">
-          <p class="placeholder-text">Backend data files will be listed here.</p>
+          <div class="data-file-row"><span>BAM_f7_default (portfolio_f7_annual.csv)</span><span style="color:var(--text-muted);">portfolio</span></div>
+          <div class="data-file-row"><span>returns.csv</span><span style="color:var(--text-muted);">security returns</span></div>
+          <div class="data-file-row"><span>index_returns.csv</span><span style="color:var(--text-muted);">index returns (SPX)</span></div>
         </div>
       </div>
       <div class="data-card">
