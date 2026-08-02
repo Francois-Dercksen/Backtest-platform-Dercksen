@@ -229,3 +229,4 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- INITIAL RENDER ---------- */
   renderResults();
 });
+
