@@ -1,32 +1,225 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Cloudflare Pages Test</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      display: flex;
-      height: 100vh;
-      margin: 0;
-      align-items: center;
-      justify-content: center;
-      background: #1a1a2e;
-      color: #eaeaea;
-    }
-    .box {
-      text-align: center;
-      padding: 2rem;
-      border-radius: 12px;
-      background: #16213e;
-    }
-    h1 { color: #4ade80; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DERCKSEN Backtest</title>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div class="box">
-    <h1>✅ Deployment Successful</h1>
-    <p>Cloudflare Pages is connected to GitHub and serving this repo.</p>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">D</span>
+    <span class="brand-name">DERCKSEN <span class="brand-accent">BACKTEST</span></span>
   </div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="math">Math</button>
+    <button class="tab-btn" data-tab="backtest">Backtest</button>
+    <button class="tab-btn" data-tab="results">Results</button>
+    <button class="tab-btn" data-tab="data">Data</button>
+  </nav>
+</header>
+
+<main class="content">
+
+  <!-- OVERVIEW -->
+  <section id="overview" class="tab-panel active">
+    <div class="panel-inner">
+      <h1>Overview</h1>
+      <p class="placeholder-text">DERCKSEN Backtest is a platform for configuring, running, and analyzing quantitative portfolio and options strategy backtests against historical returns data.</p>
+    </div>
+  </section>
+
+  <!-- MATH -->
+  <section id="math" class="tab-panel">
+    <div class="panel-inner">
+      <h1>Math &amp; Metrics</h1>
+      <p class="section-sub">Formulas and definitions for the metrics used throughout the backtest engine.</p>
+
+      <div class="formula-card">
+        <h2>Alpha</h2>
+        <div class="formula">
+          &alpha; = R<sub>p</sub> &minus; [R<sub>f</sub> + &beta;(R<sub>m</sub> &minus; R<sub>f</sub>)]
+        </div>
+        <p class="formula-desc">Excess return of the portfolio relative to the return predicted by the Capital Asset Pricing Model (CAPM), given its beta.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Beta</h2>
+        <div class="formula">
+          &beta; = Cov(R<sub>p</sub>, R<sub>m</sub>) / Var(R<sub>m</sub>)
+        </div>
+        <p class="formula-desc">Sensitivity of the portfolio's returns to movements in the benchmark market returns.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Sortino Ratio</h2>
+        <div class="formula">
+          Sortino = (R<sub>p</sub> &minus; R<sub>f</sub>) / &sigma;<sub>d</sub>
+        </div>
+        <p class="formula-desc">Risk-adjusted return using downside deviation (&sigma;<sub>d</sub>) instead of total volatility, penalizing only harmful volatility.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- BACKTEST -->
+  <section id="backtest" class="tab-panel">
+    <div class="panel-inner">
+      <h1>Backtest</h1>
+
+      <div class="config-card">
+        <h2>Configure Strategy</h2>
+        <div class="field-row">
+          <label for="backtest-name">Backtest Name</label>
+          <input type="text" id="backtest-name" placeholder="e.g. Tech Momentum Q1">
+        </div>
+
+        <div class="strategy-list" id="strategy-list">
+
+          <div class="strategy-item" data-strategy="long-portfolio">
+            <label class="strategy-check">
+              <input type="checkbox" class="strategy-toggle">
+              <span>Long Portfolio</span>
+            </label>
+            <div class="strategy-fields">
+              <div class="field-row"><label>Universe / Tickers</label><input type="text" placeholder="e.g. AAPL, MSFT, GOOGL"></div>
+              <div class="field-row"><label>Weighting Scheme</label><input type="text" placeholder="Equal weight / custom"></div>
+              <div class="field-row"><label>Start Date</label><input type="text" placeholder="YYYY-MM-DD"></div>
+              <div class="field-row"><label>End Date</label><input type="text" placeholder="YYYY-MM-DD"></div>
+            </div>
+          </div>
+
+          <div class="strategy-item" data-strategy="short-portfolio">
+            <label class="strategy-check">
+              <input type="checkbox" class="strategy-toggle">
+              <span>Short Portfolio</span>
+            </label>
+            <div class="strategy-fields">
+              <div class="field-row"><label>Universe / Tickers</label><input type="text" placeholder="e.g. AAPL, MSFT, GOOGL"></div>
+              <div class="field-row"><label>Borrow Rate</label><input type="text" placeholder="e.g. 1.5%"></div>
+              <div class="field-row"><label>Start Date</label><input type="text" placeholder="YYYY-MM-DD"></div>
+              <div class="field-row"><label>End Date</label><input type="text" placeholder="YYYY-MM-DD"></div>
+            </div>
+          </div>
+
+          <div class="strategy-item" data-strategy="long-call">
+            <label class="strategy-check">
+              <input type="checkbox" class="strategy-toggle">
+              <span>Long Call</span>
+            </label>
+            <div class="strategy-fields">
+              <div class="field-row"><label>Underlying</label><input type="text" placeholder="e.g. SPY"></div>
+              <div class="field-row"><label>Strike</label><input type="text" placeholder="e.g. 450"></div>
+              <div class="field-row"><label>Expiry</label><input type="text" placeholder="YYYY-MM-DD"></div>
+              <div class="field-row"><label>Premium</label><input type="text" placeholder="e.g. 5.20"></div>
+            </div>
+          </div>
+
+          <div class="strategy-item" data-strategy="short-call">
+            <label class="strategy-check">
+              <input type="checkbox" class="strategy-toggle">
+              <span>Short Call</span>
+            </label>
+            <div class="strategy-fields">
+              <div class="field-row"><label>Underlying</label><input type="text" placeholder="e.g. SPY"></div>
+              <div class="field-row"><label>Strike</label><input type="text" placeholder="e.g. 450"></div>
+              <div class="field-row"><label>Expiry</label><input type="text" placeholder="YYYY-MM-DD"></div>
+              <div class="field-row"><label>Premium</label><input type="text" placeholder="e.g. 5.20"></div>
+            </div>
+          </div>
+
+          <div class="strategy-item" data-strategy="long-put">
+            <label class="strategy-check">
+              <input type="checkbox" class="strategy-toggle">
+              <span>Long Put</span>
+            </label>
+            <div class="strategy-fields">
+              <div class="field-row"><label>Underlying</label><input type="text" placeholder="e.g. SPY"></div>
+              <div class="field-row"><label>Strike</label><input type="text" placeholder="e.g. 420"></div>
+              <div class="field-row"><label>Expiry</label><input type="text" placeholder="YYYY-MM-DD"></div>
+              <div class="field-row"><label>Premium</label><input type="text" placeholder="e.g. 4.10"></div>
+            </div>
+          </div>
+
+          <div class="strategy-item" data-strategy="short-put">
+            <label class="strategy-check">
+              <input type="checkbox" class="strategy-toggle">
+              <span>Short Put</span>
+            </label>
+            <div class="strategy-fields">
+              <div class="field-row"><label>Underlying</label><input type="text" placeholder="e.g. SPY"></div>
+              <div class="field-row"><label>Strike</label><input type="text" placeholder="e.g. 420"></div>
+              <div class="field-row"><label>Expiry</label><input type="text" placeholder="YYYY-MM-DD"></div>
+              <div class="field-row"><label>Premium</label><input type="text" placeholder="e.g. 4.10"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="flow-card">
+        <h2>Strategy Flow</h2>
+        <div id="flow-diagram" class="flow-diagram">
+          <p class="placeholder-text">Flow diagram will render here once a strategy is selected.</p>
+        </div>
+      </div>
+
+      <div class="run-row">
+        <button id="run-backtest-btn" class="btn-primary">Run Backtest</button>
+        <span id="run-status" class="run-status"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="results" class="tab-panel">
+    <div class="panel-inner">
+      <h1>Results</h1>
+      <div id="results-list" class="results-list">
+        <p class="placeholder-text" id="results-empty">No backtests have been run yet.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DATA -->
+  <section id="data" class="tab-panel">
+    <div class="panel-inner">
+      <h1>Data</h1>
+      <div class="data-card">
+        <h2>Available Data Files</h2>
+        <div id="data-file-list" class="data-file-list">
+          <p class="placeholder-text">Backend data files will be listed here.</p>
+        </div>
+      </div>
+      <div class="data-card">
+        <h2>Upload Additional Data</h2>
+        <input type="file" id="data-upload" accept=".csv">
+        <button class="btn-secondary" id="upload-btn">Upload</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="dashboard-modal" class="modal hidden">
+  <div class="modal-content">
+    <button class="modal-close" id="modal-close-btn">&times;</button>
+    <iframe id="dashboard-frame" src=""></iframe>
+  </div>
+</div>
+
+<div id="confirm-modal" class="modal hidden">
+  <div class="modal-content confirm-box">
+    <p id="confirm-message">Are you sure you want to delete this backtest?</p>
+    <div class="confirm-actions">
+      <button class="btn-secondary" id="confirm-cancel">Cancel</button>
+      <button class="btn-danger" id="confirm-delete">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/main.js"></script>
 </body>
 </html>
