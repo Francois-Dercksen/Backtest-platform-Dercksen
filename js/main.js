@@ -1,6 +1,6 @@
 // DERCKSEN Backtest — frontend logic
 
-const RENDER_API_URL = "https://YOUR-RENDER-SERVICE.onrender.com";
+const RENDER_API_URL = "https://dercksen-backtest-api.onrender.com";
 
 document.addEventListener('DOMContentLoaded', () => {
 
