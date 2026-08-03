@@ -36,22 +36,50 @@
   <section id="math" class="tab-panel">
     <div class="panel-inner">
       <h1>Math &amp; Metrics</h1>
-      <p class="section-sub">Formulas and definitions for the metrics used throughout the backtest engine.</p>
+      <p class="section-sub">Formulas and definitions for every metric used throughout the backtest engine.</p>
+
+      <div class="formula-section-title">Return Metrics</div>
 
       <div class="formula-card">
-        <h2>Alpha</h2>
+        <h2>Period Return</h2>
         <div class="formula">
-          &alpha; = R<sub>p</sub> &minus; R<sub>bm</sub>
+          R<sub>t</sub> = &sum;<sub>i</sub> w<sub>i</sub> &middot; r<sub>i,t</sub> / &sum;<sub>i</sub> w<sub>i</sub>
         </div>
-        <p class="formula-desc">Annualised portfolio return minus the annualised benchmark (SPX) return over the common backtest window.</p>
+        <p class="formula-desc">Weighted average of each holding's compounded return over the rebalance period, normalised by total weight actually matched to available data.</p>
       </div>
 
       <div class="formula-card">
-        <h2>Beta</h2>
+        <h2>Cumulative Return</h2>
         <div class="formula">
-          &beta; = Cov(R<sub>p</sub>, R<sub>bm</sub>) / Var(R<sub>bm</sub>)
+          C<sub>n</sub> = &prod;<sub>t=1</sub><sup>n</sup> (1 + R<sub>t</sub>) &minus; 1
         </div>
-        <p class="formula-desc">Sensitivity of the portfolio's period returns to the benchmark's period returns, estimated via the covariance matrix over the aligned sample.</p>
+        <p class="formula-desc">Compounded growth of the portfolio across all periods in the backtest window, expressed as total percentage gain from period 1 to period n.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>CAGR (Annualised Return)</h2>
+        <div class="formula">
+          CAGR = (1 + C<sub>n</sub>)<sup>ppy / n</sup> &minus; 1
+        </div>
+        <p class="formula-desc">Geometric annualised return, where n is the number of periods in the backtest and ppy is periods-per-year for the chosen rebalance frequency (1 for annual, 4 for quarterly, 12 for monthly).</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Best / Worst Period &amp; Rolling CAGR</h2>
+        <div class="formula">
+          RollCAGR<sub>i</sub> = (&prod;<sub>t=i</sub><sup>i+w&minus;1</sup> (1 + R<sub>t</sub>))<sup>ppy / w</sup> &minus; 1
+        </div>
+        <p class="formula-desc">Best/worst single period return is simply max/min of R<sub>t</sub>. Rolling CAGR applies the CAGR formula to every overlapping window of w consecutive periods (default w = 3) and reports the best and worst window.</p>
+      </div>
+
+      <div class="formula-section-title">Risk-Adjusted Ratios</div>
+
+      <div class="formula-card">
+        <h2>Sharpe Ratio</h2>
+        <div class="formula">
+          Sharpe = R<sub>ann</sub> / &sigma;<sub>ann</sub>
+        </div>
+        <p class="formula-desc">Annualised return divided by annualised standard deviation of returns, computed at the chosen risk frequency (default monthly) and scaled by &radic;(periods-per-year).</p>
       </div>
 
       <div class="formula-card">
@@ -59,8 +87,135 @@
         <div class="formula">
           Sortino = R<sub>ann</sub> / &sigma;<sub>downside,ann</sub>
         </div>
-        <p class="formula-desc">Annualised return divided by annualised downside deviation, where downside deviation only uses periods with negative returns.</p>
+        <p class="formula-desc">Annualised return divided by annualised downside deviation, where downside deviation only uses periods with negative returns: &radic;(mean(min(r,0)&sup2;)) &middot; &radic;(periods-per-year).</p>
       </div>
+
+      <div class="formula-card">
+        <h2>Calmar Ratio</h2>
+        <div class="formula">
+          Calmar = R<sub>ann</sub> / |MaxDD|
+        </div>
+        <p class="formula-desc">Annualised return divided by the absolute value of maximum drawdown, measuring return per unit of worst-case peak-to-trough loss.</p>
+      </div>
+
+      <div class="formula-section-title">Drawdown &amp; Tail Risk</div>
+
+      <div class="formula-card">
+        <h2>Maximum Drawdown</h2>
+        <div class="formula">
+          MaxDD = min<sub>t</sub> ( C<sub>t</sub> / max<sub>&tau;&le;t</sub>(C<sub>&tau;</sub>) &minus; 1 )
+        </div>
+        <p class="formula-desc">Largest peak-to-trough decline in the cumulative return series, tracking the running maximum of wealth and measuring the deepest subsequent fall.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Value at Risk (95%)</h2>
+        <div class="formula">
+          VaR<sub>95</sub> = Percentile<sub>5</sub>(R<sub>t</sub>)
+        </div>
+        <p class="formula-desc">The 5th percentile of the period return distribution &mdash; the loss level exceeded only 5% of the time historically.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Hit Rate</h2>
+        <div class="formula">
+          HitRate = count(R<sub>t</sub> &gt; 0) / n
+        </div>
+        <p class="formula-desc">Proportion of periods with a positive return, out of all n periods in the backtest.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Standard Deviation of Period Returns</h2>
+        <div class="formula">
+          &sigma;<sub>period</sub> = stdev(R<sub>1</sub>, R<sub>2</sub>, &hellip;, R<sub>n</sub>)
+        </div>
+        <p class="formula-desc">Sample standard deviation of the period-level (e.g. annual) returns, unscaled &mdash; a simple measure of period-to-period dispersion.</p>
+      </div>
+
+      <div class="formula-section-title">Benchmark-Relative Metrics</div>
+
+      <div class="formula-card">
+        <h2>Beta</h2>
+        <div class="formula">
+          &beta; = Cov(R<sub>p</sub>, R<sub>bm</sub>) / Var(R<sub>bm</sub>)
+        </div>
+        <p class="formula-desc">Sensitivity of the portfolio's period returns to the benchmark's (SPX) period returns, estimated via the covariance matrix over the common aligned sample.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Alpha</h2>
+        <div class="formula">
+          &alpha; = R<sub>p,ann</sub> &minus; R<sub>bm,ann</sub>
+        </div>
+        <p class="formula-desc">Annualised portfolio return minus the annualised benchmark return over the common backtest window &mdash; the excess return not explained by simply tracking the index.</p>
+      </div>
+
+      <div class="formula-section-title">Long Put Overlay Metrics</div>
+
+      <div class="formula-card">
+        <h2>Put Notional (Beta-Matched)</h2>
+        <div class="formula">
+          N = &beta;<sub>method</sub> &middot; PortfolioValue
+        </div>
+        <p class="formula-desc">Notional value of protection purchased, sized by beta so the hedge offsets the portfolio's actual market sensitivity. Real Beta uses the full-period beta; Dynamic Beta recomputes an expanding-window beta before each period using only prior data; Custom uses a fixed user-supplied value.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Put Payoff</h2>
+        <div class="formula">
+          Payoff<sub>t</sub> = max(K &minus; S<sub>t</sub>, 0) &middot; N
+        </div>
+        <p class="formula-desc">Intrinsic value at expiry, where K is the strike (e.g. 90% of spot for 10% OTM) and S<sub>t</sub> is the benchmark index level at the end of the period, both expressed relative to a starting level of 1.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Net Hedge P&amp;L and Hedged Return</h2>
+        <div class="formula">
+          NetPnL<sub>t</sub> = Payoff<sub>t</sub> &minus; Premium<sub>t</sub> &nbsp;&nbsp;|&nbsp;&nbsp; R<sub>hedged,t</sub> = R<sub>p,t</sub> + NetPnL<sub>t</sub>
+        </div>
+        <p class="formula-desc">Net cost or gain from the option position after subtracting the premium paid, added directly to the unhedged portfolio return to produce the hedged return series.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Exercise Rate</h2>
+        <div class="formula">
+          ExerciseRate = n<sub>exercised</sub> / n<sub>years</sub>
+        </div>
+        <p class="formula-desc">Fraction of periods in which the put finished in-the-money (benchmark fell below the strike) and was therefore exercised.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Hedge Effectiveness (Correlation)</h2>
+        <div class="formula">
+          Corr = Corr(R<sub>p</sub>, NetPnL)
+        </div>
+        <p class="formula-desc">Correlation between the unhedged portfolio return and the net hedge P&amp;L. A more negative value means the hedge pays off precisely when the portfolio falls &mdash; the ideal insurance behaviour.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Drawdown Reduction</h2>
+        <div class="formula">
+          &Delta;DD = |MaxDD<sub>unhedged</sub>| &minus; |MaxDD<sub>hedged</sub>|
+        </div>
+        <p class="formula-desc">How much smaller the worst peak-to-trough decline becomes once the put overlay is applied. A positive value means the hedge reduced maximum drawdown.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Average Annual Premium Drag</h2>
+        <div class="formula">
+          Drag = mean(Premium<sub>t</sub>)
+        </div>
+        <p class="formula-desc">Average yearly cost of carrying the insurance, expressed as a percentage of the beta-matched notional, whether or not the put was exercised that period.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Net Hedge Cost</h2>
+        <div class="formula">
+          NetCost = &sum; Premium<sub>t</sub> &minus; &sum; Payoff<sub>t</sub>
+        </div>
+        <p class="formula-desc">Cumulative premiums paid over the full backtest minus cumulative payoffs received, expressed as a percentage of the initial investment &mdash; the all-in cost of running the hedge.</p>
+      </div>
+
     </div>
   </section>
 
@@ -172,39 +327,40 @@
           </div>
 
           <div class="strategy-item" data-strategy="long-put">
-  <label class="strategy-check">
-    <input type="checkbox" class="strategy-toggle">
-    <span>Long Put</span>
-  </label>
-  <div class="strategy-fields">
-    <div class="field-row">
-      <label>Underlying</label>
-      <select class="underlying-select">
-        <option value="SPX" selected>SPX</option>
-      </select>
-    </div>
-    <div class="field-row"><label>Strike (% of spot)</label><input type="text" class="put-strike" value="90%" placeholder="e.g. 90%"></div>
-    <div class="field-row">
-      <label>Term</label>
-      <select class="term-select">
-        <option value="365" selected>365-day</option>
-      </select>
-    </div>
-    <div class="field-row"><label>Premium (%)</label><input type="text" class="put-premium" value="4.19%" placeholder="e.g. 4.19%"></div>
-    <div class="field-row">
-      <label>Notional Matching</label>
-      <select class="put-notional-method">
-        <option value="real-beta" selected>Real Beta (full-period)</option>
-        <option value="dynamic-beta">Dynamic Beta (expanding window)</option>
-        <option value="custom">Custom</option>
-      </select>
-    </div>
-    <div class="field-row put-custom-beta-row">
-      <label>Custom Beta Value</label>
-      <input type="text" class="put-custom-beta" placeholder="e.g. 1.06">
-    </div>
-  </div>
-</div>
+            <label class="strategy-check">
+              <input type="checkbox" class="strategy-toggle">
+              <span>Long Put</span>
+            </label>
+            <div class="strategy-fields">
+              <div class="field-row">
+                <label>Underlying</label>
+                <select class="underlying-select">
+                  <option value="SPX" selected>SPX</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Strike (% of spot)</label><input type="text" class="put-strike" value="90%" placeholder="e.g. 90%"></div>
+              <div class="field-row">
+                <label>Term</label>
+                <select class="term-select">
+                  <option value="365" selected>365-day</option>
+                </select>
+              </div>
+              <div class="field-row"><label>Premium (%)</label><input type="text" class="put-premium" value="4.19%" placeholder="e.g. 4.19%"></div>
+              <div class="field-row">
+                <label>Notional Matching</label>
+                <select class="put-notional-method">
+                  <option value="real-beta" selected>Real Beta (full-period)</option>
+                  <option value="dynamic-beta">Dynamic Beta (expanding window)</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+              <div class="field-row put-custom-beta-row">
+                <label>Custom Beta Value</label>
+                <input type="text" class="put-custom-beta" placeholder="e.g. 1.06">
+              </div>
+            </div>
+          </div>
+
           <div class="strategy-item" data-strategy="short-put">
             <label class="strategy-check">
               <input type="checkbox" class="strategy-toggle">
