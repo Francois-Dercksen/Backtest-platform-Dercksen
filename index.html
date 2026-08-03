@@ -172,28 +172,39 @@
           </div>
 
           <div class="strategy-item" data-strategy="long-put">
-            <label class="strategy-check">
-              <input type="checkbox" class="strategy-toggle">
-              <span>Long Put</span>
-            </label>
-            <div class="strategy-fields">
-              <div class="field-row">
-                <label>Underlying</label>
-                <select class="underlying-select">
-                  <option value="SPX" selected>SPX</option>
-                </select>
-              </div>
-              <div class="field-row"><label>Strike (% of spot)</label><input type="text" value="90%" placeholder="e.g. 90%"></div>
-              <div class="field-row">
-                <label>Term</label>
-                <select class="term-select">
-                  <option value="365" selected>365-day</option>
-                </select>
-              </div>
-              <div class="field-row"><label>Premium (%)</label><input type="text" value="4.19%" placeholder="e.g. 4.19%"></div>
-            </div>
-          </div>
-
+  <label class="strategy-check">
+    <input type="checkbox" class="strategy-toggle">
+    <span>Long Put</span>
+  </label>
+  <div class="strategy-fields">
+    <div class="field-row">
+      <label>Underlying</label>
+      <select class="underlying-select">
+        <option value="SPX" selected>SPX</option>
+      </select>
+    </div>
+    <div class="field-row"><label>Strike (% of spot)</label><input type="text" class="put-strike" value="90%" placeholder="e.g. 90%"></div>
+    <div class="field-row">
+      <label>Term</label>
+      <select class="term-select">
+        <option value="365" selected>365-day</option>
+      </select>
+    </div>
+    <div class="field-row"><label>Premium (%)</label><input type="text" class="put-premium" value="4.19%" placeholder="e.g. 4.19%"></div>
+    <div class="field-row">
+      <label>Notional Matching</label>
+      <select class="put-notional-method">
+        <option value="real-beta" selected>Real Beta (full-period)</option>
+        <option value="dynamic-beta">Dynamic Beta (expanding window)</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div class="field-row put-custom-beta-row">
+      <label>Custom Beta Value</label>
+      <input type="text" class="put-custom-beta" placeholder="e.g. 1.06">
+    </div>
+  </div>
+</div>
           <div class="strategy-item" data-strategy="short-put">
             <label class="strategy-check">
               <input type="checkbox" class="strategy-toggle">
