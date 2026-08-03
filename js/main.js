@@ -27,6 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  /* ---------- LONG PUT: SHOW/HIDE CUSTOM BETA FIELD ---------- */
+  document.querySelectorAll('.put-notional-method').forEach(select => {
+    const row = select.closest('.strategy-fields').querySelector('.put-custom-beta-row');
+    const toggle = () => { row.style.display = select.value === 'custom' ? '' : 'none'; };
+    toggle();
+    select.addEventListener('change', toggle);
+  });
+
   function updateFlowDiagram() {
     const flow = document.getElementById('flow-diagram');
     const selected = Array.from(document.querySelectorAll('.strategy-toggle:checked'))
@@ -77,13 +85,26 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // MVP: only Long Portfolio is wired to the real backend right now.
     const longPortfolioItem = findStrategyItem('long-portfolio');
     const longPortfolioSelected = longPortfolioItem
       && longPortfolioItem.querySelector('.strategy-toggle').checked;
 
+    const longPutItem = findStrategyItem('long-put');
+    const longPutSelected = longPutItem && longPutItem.querySelector('.strategy-toggle').checked;
+
+    // MVP: only Long Portfolio (optionally + Long Put overlay) is wired to the real backend.
+    const otherStrategiesSelected = selected.some(cb => {
+      const key = cb.closest('.strategy-item').dataset.strategy;
+      return key !== 'long-portfolio' && key !== 'long-put';
+    });
+
     if (!longPortfolioSelected) {
-      runStatus.textContent = 'Only Long Portfolio is supported right now — select it to run.';
+      runStatus.textContent = 'Long Portfolio must be selected to run a backtest right now.';
+      runStatus.style.color = 'var(--danger)';
+      return;
+    }
+    if (otherStrategiesSelected) {
+      runStatus.textContent = 'Only Long Portfolio and Long Put are supported right now.';
       runStatus.style.color = 'var(--danger)';
       return;
     }
@@ -93,6 +114,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const riskFreeRate = document.getElementById('risk-free-rate').value.trim();
     const weightInput = longPortfolioItem.querySelector('.field-row:nth-of-type(2) input');
     const weight = weightInput ? weightInput.value.trim() : '100%';
+
+    let longPutPayload = null;
+    if (longPutSelected) {
+      const strike = longPutItem.querySelector('.put-strike').value.trim();
+      const premium = longPutItem.querySelector('.put-premium').value.trim();
+      const notionalMethod = longPutItem.querySelector('.put-notional-method').value;
+      const customBeta = longPutItem.querySelector('.put-custom-beta').value.trim();
+
+      longPutPayload = {
+        strike,
+        premium,
+        notional_method: notionalMethod,
+        custom_beta: notionalMethod === 'custom' ? customBeta : null
+      };
+    }
 
     runStatus.textContent = 'Running backtest...';
     runStatus.style.color = 'var(--text-muted)';
@@ -107,7 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
           start_date: startDate,
           end_date: endDate,
           risk_free_rate: riskFreeRate,
-          weight
+          weight,
+          long_put: longPutPayload
         })
       });
 
@@ -137,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         specs,
         metrics: data.metrics || {},
         benchmark: data.benchmark || null,
+        putStats: data.put_stats || null,
         dashboardHtml: data.dashboard_html
       };
 
@@ -194,7 +232,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <dl>
             ${Object.entries(bt.globalParams || {}).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}
             ${bt.specs.map(s => `<dt>${s.strategy}</dt><dd>${Object.entries(s.fields).map(([k,v]) => `${k}: ${v}`).join(', ')}</dd>`).join('')}
-            ${bt.metrics ? Object.entries(bt.metrics).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') : ''}
+            ${bt.metrics ? Object.entries(bt.metrics).filter(([k]) => k !== 'benchmark').map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') : ''}
+            ${bt.putStats ? Object.entries(bt.putStats).map(([k,v]) => `<dt>put: ${k}</dt><dd>${v}</dd>`).join('') : ''}
           </dl>
         </div>
       </div>
