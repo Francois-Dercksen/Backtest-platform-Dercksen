@@ -1,5 +1,7 @@
 // DERCKSEN Backtest — frontend logic
 
+const RENDER_API_URL = "https://YOUR-RENDER-SERVICE.onrender.com";
+
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- TAB SWITCHING ---------- */
@@ -52,11 +54,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return fields;
   }
 
-  /* ---------- RUN BACKTEST (placeholder logic) ---------- */
+  function findStrategyItem(key) {
+    return document.querySelector(`.strategy-item[data-strategy="${key}"]`);
+  }
+
+  /* ---------- RUN BACKTEST (calls real backend) ---------- */
   const runBtn = document.getElementById('run-backtest-btn');
   const runStatus = document.getElementById('run-status');
 
-  runBtn.addEventListener('click', () => {
+  runBtn.addEventListener('click', async () => {
     const name = document.getElementById('backtest-name').value.trim();
     const selected = Array.from(document.querySelectorAll('.strategy-toggle:checked'));
 
@@ -71,16 +77,50 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // MVP: only Long Portfolio is wired to the real backend right now.
+    const longPortfolioItem = findStrategyItem('long-portfolio');
+    const longPortfolioSelected = longPortfolioItem
+      && longPortfolioItem.querySelector('.strategy-toggle').checked;
+
+    if (!longPortfolioSelected) {
+      runStatus.textContent = 'Only Long Portfolio is supported right now — select it to run.';
+      runStatus.style.color = 'var(--danger)';
+      return;
+    }
+
+    const startDate = document.getElementById('start-date').value.trim();
+    const endDate = document.getElementById('end-date').value.trim();
+    const riskFreeRate = document.getElementById('risk-free-rate').value.trim();
+    const weightInput = longPortfolioItem.querySelector('.field-row:nth-of-type(2) input');
+    const weight = weightInput ? weightInput.value.trim() : '100%';
+
     runStatus.textContent = 'Running backtest...';
     runStatus.style.color = 'var(--text-muted)';
+    runBtn.disabled = true;
 
-    // Placeholder: in production this calls the backend API which runs
-    // the calculation and returns/saves an HTML dashboard.
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${RENDER_API_URL}/api/backtest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          start_date: startDate,
+          end_date: endDate,
+          risk_free_rate: riskFreeRate,
+          weight
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Backtest failed on the server.');
+      }
+
       const globalParams = {
-        'Start Date': document.getElementById('start-date').value,
-        'End Date': document.getElementById('end-date').value,
-        'Risk Free Rate': document.getElementById('risk-free-rate').value
+        'Start Date': startDate,
+        'End Date': endDate,
+        'Risk Free Rate': riskFreeRate
       };
 
       const specs = selected.map(cb => {
@@ -91,30 +131,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const backtest = {
         id: Date.now().toString(),
-        name,
+        name: data.name || name,
         createdAt: new Date().toLocaleString(),
         globalParams,
         specs,
-        dashboardHtml: buildPlaceholderDashboard(name, globalParams, specs)
+        metrics: data.metrics || {},
+        benchmark: data.benchmark || null,
+        dashboardHtml: data.dashboard_html
       };
 
       saveBacktest(backtest);
       runStatus.textContent = 'Backtest complete. View it in the Results tab.';
       runStatus.style.color = 'var(--accent)';
-    }, 900);
+
+    } catch (err) {
+      runStatus.textContent = `Error: ${err.message}`;
+      runStatus.style.color = 'var(--danger)';
+    } finally {
+      runBtn.disabled = false;
+    }
   });
 
-  function buildPlaceholderDashboard(name, globalParams, specs) {
-    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${name}</title>
-    <style>body{font-family:sans-serif;padding:2rem;background:#fff;color:#1b1f27;}
-    h1{color:#0f4c81;} .spec{margin-bottom:1rem;padding:1rem;border:1px solid #e3e6ea;border-radius:8px;}</style>
-    </head><body><h1>${name}</h1><p>Placeholder results dashboard.</p>
-    <div class="spec"><strong>Global Parameters</strong><br>${Object.entries(globalParams).map(([k,v]) => `${k}: ${v}`).join('<br>')}</div>
-    ${specs.map(s => `<div class="spec"><strong>${s.strategy}</strong><br>${Object.entries(s.fields).map(([k,v]) => `${k}: ${v}`).join('<br>')}</div>`).join('')}
-    </body></html>`;
-  }
-
-  /* ---------- RESULTS STORAGE (localStorage placeholder) ---------- */
+  /* ---------- RESULTS STORAGE (localStorage cache of backend results) ---------- */
   function getBacktests() {
     return JSON.parse(localStorage.getItem('dercksen_backtests') || '[]');
   }
@@ -156,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <dl>
             ${Object.entries(bt.globalParams || {}).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}
             ${bt.specs.map(s => `<dt>${s.strategy}</dt><dd>${Object.entries(s.fields).map(([k,v]) => `${k}: ${v}`).join(', ')}</dd>`).join('')}
+            ${bt.metrics ? Object.entries(bt.metrics).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') : ''}
           </dl>
         </div>
       </div>
@@ -227,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('confirm-modal').classList.add('hidden');
   });
 
-  /* ---------- DATA TAB (placeholder) ---------- */
+  /* ---------- DATA TAB (still placeholder — no backend upload endpoint yet) ---------- */
   document.getElementById('upload-btn').addEventListener('click', () => {
     const fileInput = document.getElementById('data-upload');
     if (fileInput.files.length === 0) return;
@@ -238,9 +277,6 @@ document.addEventListener('DOMContentLoaded', () => {
     row.innerHTML = `<span>${fileName}</span><span style="color:var(--text-muted);">(pending backend upload)</span>`;
     list.appendChild(row);
     fileInput.value = '';
-
-    // Placeholder: newly uploaded portfolio CSVs should also appear
-    // as options in the Long/Short Portfolio comboboxes once backend exists.
   });
 
   /* ---------- INITIAL RENDER ---------- */
