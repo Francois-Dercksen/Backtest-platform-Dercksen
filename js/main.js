@@ -172,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      data.created_at = new Date();
       savedResults.push(data);
       renderResultsList();
       showStatus('Backtest complete — view it in the Results tab.', false);
@@ -182,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ---------- RESULTS LIST ---------- */
+  /* ---------- RESULTS LIST (row-based table, matches original layout) ---------- */
   function fmtPct(v) {
     return (v === null || v === undefined || isNaN(v)) ? '--' : (v * 100).toFixed(2) + '%';
   }
@@ -200,30 +201,50 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    list.innerHTML = '';
+    const table = document.createElement('table');
+    table.className = 'results-table';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Strategies</th>
+          <th>CAGR</th>
+          <th>Sharpe</th>
+          <th>Max DD</th>
+          <th>Gearing (avg)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+
+    const tbody = table.querySelector('tbody');
     savedResults.forEach((r, idx) => {
       const m = (r.net && r.net.metrics) || {};
+      const periods = (r.net && r.net.periods) || [];
+      const avgGearing = periods.length
+        ? periods.reduce((s, p) => s + (p.net_gearing || 0), 0) / periods.length
+        : null;
       const legLabels = Object.values(r.legs || {}).map(l => l.label).join(', ');
 
-      const card = document.createElement('div');
-      card.className = 'result-card';
-      card.innerHTML = `
-        <div class="result-card-header">
-          <h3>${r.name}</h3>
-          <div class="result-card-actions">
-            <button class="btn-secondary view-btn" data-idx="${idx}">View Report</button>
-            <button class="btn-danger delete-btn" data-idx="${idx}">Delete</button>
-          </div>
-        </div>
-        <div class="result-card-metrics">
-          <span>CAGR: ${fmtPct(m.annualised_return)}</span>
-          <span>Sharpe: ${fmtNum(m.sharpe)}</span>
-          <span>Max DD: ${fmtPct(m.max_drawdown)}</span>
-          <span>Legs: ${legLabels || '--'}</span>
-        </div>
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.name}</td>
+        <td>${legLabels || '--'}</td>
+        <td>${fmtPct(m.annualised_return)}</td>
+        <td>${fmtNum(m.sharpe)}</td>
+        <td>${fmtPct(m.max_drawdown)}</td>
+        <td>${avgGearing !== null ? avgGearing.toFixed(2) + 'x' : '--'}</td>
+        <td class="row-actions">
+          <button class="btn-secondary view-btn" data-idx="${idx}">View Report</button>
+          <button class="btn-danger delete-btn" data-idx="${idx}">Delete</button>
+        </td>
       `;
-      list.appendChild(card);
+      tbody.appendChild(tr);
     });
+
+    list.innerHTML = '';
+    list.appendChild(table);
 
     list.querySelectorAll('.view-btn').forEach(btn => {
       btn.addEventListener('click', () => openDashboard(savedResults[parseInt(btn.dataset.idx, 10)]));
