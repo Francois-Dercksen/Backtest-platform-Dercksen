@@ -2,6 +2,9 @@
 
 const RENDER_API_URL = "https://dercksen-backtest-api.onrender.com";
 
+let savedResults = [];
+let pendingDeleteIdx = null;
+
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- TAB SWITCHING ---------- */
@@ -14,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
       tabPanels.forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'results') renderResults();
     });
   });
 
@@ -35,6 +37,20 @@ document.addEventListener('DOMContentLoaded', () => {
     select.addEventListener('change', toggle);
   });
 
+  /* ---------- LONG CALL: SHOW/HIDE FIXED VS WEIGHT SIZING FIELDS ---------- */
+  document.querySelectorAll('.call-sizing-mode').forEach(select => {
+    const fields = select.closest('.strategy-fields');
+    const fixedRow = fields.querySelector('.call-fixed-row');
+    const weightRow = fields.querySelector('.call-weight-row');
+    const toggle = () => {
+      const isFixed = select.value === 'fixed';
+      fixedRow.style.display = isFixed ? '' : 'none';
+      weightRow.style.display = isFixed ? 'none' : '';
+    };
+    toggle();
+    select.addEventListener('change', toggle);
+  });
+
   function updateFlowDiagram() {
     const flow = document.getElementById('flow-diagram');
     const selected = Array.from(document.querySelectorAll('.strategy-toggle:checked'))
@@ -50,274 +66,205 @@ document.addEventListener('DOMContentLoaded', () => {
     ).join('<span style="color:var(--text-muted);font-size:1.2rem;">&rarr;</span>');
   }
 
-  /* ---------- FIELD COLLECTION HELPERS ---------- */
-  function collectStrategyFields(item) {
-    const fields = {};
-    item.querySelectorAll('.field-row').forEach(row => {
-      const label = row.querySelector('label').textContent;
-      const input = row.querySelector('input, select');
-      const value = input ? (input.value || '(placeholder)') : '(placeholder)';
-      fields[label] = value;
+  /* ---------- COLLECT LEGS FROM UI ---------- */
+  function collectLegs() {
+    const legs = [];
+
+    document.querySelectorAll('.strategy-item').forEach(item => {
+      const toggle = item.querySelector('.strategy-toggle');
+      if (!toggle || !toggle.checked) return;
+
+      const stratKey = item.dataset.strategy;
+      const label = item.querySelector('.strategy-check span').textContent;
+
+      if (stratKey === 'long-portfolio') {
+        legs.push({
+          key: 'long_portfolio', type: 'long_portfolio', label, enabled: true,
+          params: { weight: item.querySelector('.lp-weight')?.value || '100%' },
+        });
+      } else if (stratKey === 'short-portfolio') {
+        legs.push({
+          key: 'short_portfolio', type: 'short_portfolio', label, enabled: true,
+          params: { weight: item.querySelector('.sp-weight')?.value || '100%' },
+        });
+      } else if (stratKey === 'long-put') {
+        legs.push({
+          key: 'long_put', type: 'long_put', label, enabled: true,
+          params: {
+            strike: item.querySelector('.put-strike')?.value || '90%',
+            premium: item.querySelector('.put-premium')?.value || '4.19%',
+            notional_method: item.querySelector('.put-notional-method')?.value || 'real-beta',
+            custom_beta: item.querySelector('.put-custom-beta')?.value || '',
+          },
+        });
+      } else if (stratKey === 'long-call') {
+        legs.push({
+          key: 'long_call', type: 'long_call', label, enabled: true,
+          params: {
+            strike: item.querySelector('.call-strike')?.value || '100%',
+            premium: item.querySelector('.call-premium')?.value || '4.19%',
+            sizing_mode: item.querySelector('.call-sizing-mode')?.value || 'fixed',
+            fixed_pct: item.querySelector('.call-fixed-pct')?.value || '10%',
+            weight_pct: item.querySelector('.call-weight-pct')?.value || '10%',
+          },
+        });
+      } else if (stratKey === 'short-call') {
+        legs.push({
+          key: 'short_call', type: 'short_call', label, enabled: true,
+          params: {
+            strike: item.querySelector('.short-call-strike')?.value || '100%',
+            premium: item.querySelector('.short-call-premium')?.value || '4%',
+            notional: item.querySelector('.short-call-notional')?.value || '100%',
+          },
+        });
+      } else if (stratKey === 'short-put') {
+        legs.push({
+          key: 'short_put', type: 'short_put', label, enabled: true,
+          params: {
+            strike: item.querySelector('.short-put-strike')?.value || '90%',
+            premium: item.querySelector('.short-put-premium')?.value || '4.19%',
+            notional: item.querySelector('.short-put-notional')?.value || '100%',
+          },
+        });
+      }
     });
-    return fields;
+
+    return legs;
   }
 
-  function findStrategyItem(key) {
-    return document.querySelector(`.strategy-item[data-strategy="${key}"]`);
-  }
-
-  /* ---------- RUN BACKTEST (calls real backend) ---------- */
+  /* ---------- RUN BACKTEST ---------- */
   const runBtn = document.getElementById('run-backtest-btn');
   const runStatus = document.getElementById('run-status');
 
+  function showStatus(msg, isError) {
+    runStatus.textContent = msg;
+    runStatus.style.color = isError ? 'var(--danger)' : 'var(--green, #1fae7a)';
+  }
+
   runBtn.addEventListener('click', async () => {
     const name = document.getElementById('backtest-name').value.trim();
-    const selected = Array.from(document.querySelectorAll('.strategy-toggle:checked'));
+    const legs = collectLegs();
 
-    if (!name) {
-      runStatus.textContent = 'Please enter a backtest name.';
-      runStatus.style.color = 'var(--danger)';
-      return;
-    }
-    if (selected.length === 0) {
-      runStatus.textContent = 'Select at least one strategy.';
-      runStatus.style.color = 'var(--danger)';
-      return;
-    }
+    if (!name) { showStatus('Please enter a backtest name.', true); return; }
+    if (legs.length === 0) { showStatus('Select at least one strategy.', true); return; }
 
-    const longPortfolioItem = findStrategyItem('long-portfolio');
-    const longPortfolioSelected = longPortfolioItem
-      && longPortfolioItem.querySelector('.strategy-toggle').checked;
+    const payload = {
+      name,
+      start_date: document.getElementById('start-date').value.trim(),
+      end_date: document.getElementById('end-date').value.trim(),
+      risk_free_rate: document.getElementById('risk-free-rate').value.trim(),
+      legs,
+    };
 
-    const longPutItem = findStrategyItem('long-put');
-    const longPutSelected = longPutItem && longPutItem.querySelector('.strategy-toggle').checked;
-
-    // MVP: only Long Portfolio (optionally + Long Put overlay) is wired to the real backend.
-    const otherStrategiesSelected = selected.some(cb => {
-      const key = cb.closest('.strategy-item').dataset.strategy;
-      return key !== 'long-portfolio' && key !== 'long-put';
-    });
-
-    if (!longPortfolioSelected) {
-      runStatus.textContent = 'Long Portfolio must be selected to run a backtest right now.';
-      runStatus.style.color = 'var(--danger)';
-      return;
-    }
-    if (otherStrategiesSelected) {
-      runStatus.textContent = 'Only Long Portfolio and Long Put are supported right now.';
-      runStatus.style.color = 'var(--danger)';
-      return;
-    }
-
-    const startDate = document.getElementById('start-date').value.trim();
-    const endDate = document.getElementById('end-date').value.trim();
-    const riskFreeRate = document.getElementById('risk-free-rate').value.trim();
-    const weightInput = longPortfolioItem.querySelector('.field-row:nth-of-type(2) input');
-    const weight = weightInput ? weightInput.value.trim() : '100%';
-
-    let longPutPayload = null;
-    if (longPutSelected) {
-      const strike = longPutItem.querySelector('.put-strike').value.trim();
-      const premium = longPutItem.querySelector('.put-premium').value.trim();
-      const notionalMethod = longPutItem.querySelector('.put-notional-method').value;
-      const customBeta = longPutItem.querySelector('.put-custom-beta').value.trim();
-
-      longPutPayload = {
-        strike,
-        premium,
-        notional_method: notionalMethod,
-        custom_beta: notionalMethod === 'custom' ? customBeta : null
-      };
-    }
-
-    runStatus.textContent = 'Running backtest...';
-    runStatus.style.color = 'var(--text-muted)';
+    showStatus('Running backtest...', false);
     runBtn.disabled = true;
 
     try {
-      const response = await fetch(`${RENDER_API_URL}/api/backtest`, {
+      const res = await fetch(`${RENDER_API_URL}/api/backtest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          start_date: startDate,
-          end_date: endDate,
-          risk_free_rate: riskFreeRate,
-          weight,
-          long_put: longPutPayload
-        })
+        body: JSON.stringify(payload),
       });
+      const data = await res.json();
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Backtest failed on the server.');
+      if (!res.ok) {
+        showStatus(data.error || 'Backtest failed.', true);
+        return;
       }
 
-      const globalParams = {
-        'Start Date': startDate,
-        'End Date': endDate,
-        'Risk Free Rate': riskFreeRate
-      };
-
-      const specs = selected.map(cb => {
-        const item = cb.closest('.strategy-item');
-        const strategyName = item.querySelector('span').textContent;
-        return { strategy: strategyName, fields: collectStrategyFields(item) };
-      });
-
-      const backtest = {
-        id: Date.now().toString(),
-        name: data.name || name,
-        createdAt: new Date().toLocaleString(),
-        globalParams,
-        specs,
-        metrics: data.metrics || {},
-        benchmark: data.benchmark || null,
-        putStats: data.put_stats || null,
-        dashboardHtml: data.dashboard_html
-      };
-
-      saveBacktest(backtest);
-      runStatus.textContent = 'Backtest complete. View it in the Results tab.';
-      runStatus.style.color = 'var(--accent)';
-
+      savedResults.push(data);
+      renderResultsList();
+      showStatus('Backtest complete — view it in the Results tab.', false);
     } catch (err) {
-      runStatus.textContent = `Error: ${err.message}`;
-      runStatus.style.color = 'var(--danger)';
+      showStatus('Network error: ' + err.message, true);
     } finally {
       runBtn.disabled = false;
     }
   });
 
-  /* ---------- RESULTS STORAGE (localStorage cache of backend results) ---------- */
-  function getBacktests() {
-    return JSON.parse(localStorage.getItem('dercksen_backtests') || '[]');
+  /* ---------- RESULTS LIST ---------- */
+  function fmtPct(v) {
+    return (v === null || v === undefined || isNaN(v)) ? '--' : (v * 100).toFixed(2) + '%';
+  }
+  function fmtNum(v) {
+    return (v === null || v === undefined || isNaN(v)) ? '--' : Number(v).toFixed(2);
   }
 
-  function saveBacktest(bt) {
-    const all = getBacktests();
-    all.unshift(bt);
-    localStorage.setItem('dercksen_backtests', JSON.stringify(all));
-    renderResults();
-  }
-
-  function deleteBacktest(id) {
-    const all = getBacktests().filter(b => b.id !== id);
-    localStorage.setItem('dercksen_backtests', JSON.stringify(all));
-    renderResults();
-  }
-
-  function renderResults() {
+  function renderResultsList() {
     const list = document.getElementById('results-list');
-    const all = getBacktests();
+    const empty = document.getElementById('results-empty');
 
-    if (all.length === 0) {
-      list.innerHTML = '<p class="placeholder-text" id="results-empty">No backtests have been run yet.</p>';
+    if (savedResults.length === 0) {
+      list.innerHTML = '';
+      list.appendChild(empty);
       return;
     }
 
-    list.innerHTML = all.map(bt => `
-      <div class="result-row" data-id="${bt.id}">
-        <div class="result-row-main">
-          <button class="result-caret">&#9656;</button>
-          <span class="result-name">${bt.name}</span>
-          <span style="font-size:0.8rem;color:var(--text-muted);">${bt.createdAt}</span>
-          <div class="result-actions">
-            <button class="btn-secondary result-download">Download</button>
-            <button class="btn-danger result-delete">Delete</button>
+    list.innerHTML = '';
+    savedResults.forEach((r, idx) => {
+      const m = (r.net && r.net.metrics) || {};
+      const legLabels = Object.values(r.legs || {}).map(l => l.label).join(', ');
+
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      card.innerHTML = `
+        <div class="result-card-header">
+          <h3>${r.name}</h3>
+          <div class="result-card-actions">
+            <button class="btn-secondary view-btn" data-idx="${idx}">View Report</button>
+            <button class="btn-danger delete-btn" data-idx="${idx}">Delete</button>
           </div>
         </div>
-        <div class="result-details">
-          <dl>
-            ${Object.entries(bt.globalParams || {}).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}
-            ${bt.specs.map(s => `<dt>${s.strategy}</dt><dd>${Object.entries(s.fields).map(([k,v]) => `${k}: ${v}`).join(', ')}</dd>`).join('')}
-            ${bt.metrics ? Object.entries(bt.metrics).filter(([k]) => k !== 'benchmark').map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') : ''}
-            ${bt.putStats ? Object.entries(bt.putStats).map(([k,v]) => `<dt>put: ${k}</dt><dd>${v}</dd>`).join('') : ''}
-          </dl>
+        <div class="result-card-metrics">
+          <span>CAGR: ${fmtPct(m.annualised_return)}</span>
+          <span>Sharpe: ${fmtNum(m.sharpe)}</span>
+          <span>Max DD: ${fmtPct(m.max_drawdown)}</span>
+          <span>Legs: ${legLabels || '--'}</span>
         </div>
-      </div>
-    `).join('');
+      `;
+      list.appendChild(card);
+    });
 
-    attachResultRowEvents();
-  }
-
-  function attachResultRowEvents() {
-    document.querySelectorAll('.result-row').forEach(row => {
-      const id = row.dataset.id;
-      const bt = getBacktests().find(b => b.id === id);
-
-      row.querySelector('.result-name').addEventListener('click', () => openDashboard(bt));
-
-      row.querySelector('.result-caret').addEventListener('click', (e) => {
-        e.stopPropagation();
-        row.classList.toggle('expanded');
-      });
-
-      row.querySelector('.result-download').addEventListener('click', (e) => {
-        e.stopPropagation();
-        downloadDashboard(bt);
-      });
-
-      row.querySelector('.result-delete').addEventListener('click', (e) => {
-        e.stopPropagation();
-        showConfirmDelete(id);
-      });
+    list.querySelectorAll('.view-btn').forEach(btn => {
+      btn.addEventListener('click', () => openDashboard(savedResults[parseInt(btn.dataset.idx, 10)]));
+    });
+    list.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => confirmDelete(parseInt(btn.dataset.idx, 10)));
     });
   }
 
-  function openDashboard(bt) {
+  function openDashboard(result) {
+    const modal = document.getElementById('dashboard-modal');
     const frame = document.getElementById('dashboard-frame');
-    frame.srcdoc = bt.dashboardHtml;
-    document.getElementById('dashboard-modal').classList.remove('hidden');
+    frame.srcdoc = result.dashboard_html
+      || '<p style="padding:2rem;font-family:sans-serif;">Report not available for this backtest.</p>';
+    modal.classList.remove('hidden');
   }
 
-  function downloadDashboard(bt) {
-    const blob = new Blob([bt.dashboardHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${bt.name.replace(/\s+/g, '_')}_dashboard.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  /* ---------- MODALS ---------- */
   document.getElementById('modal-close-btn').addEventListener('click', () => {
     document.getElementById('dashboard-modal').classList.add('hidden');
   });
 
-  let pendingDeleteId = null;
-
-  function showConfirmDelete(id) {
-    pendingDeleteId = id;
+  function confirmDelete(idx) {
+    pendingDeleteIdx = idx;
+    document.getElementById('confirm-message').textContent =
+      `Are you sure you want to delete "${savedResults[idx].name}"?`;
     document.getElementById('confirm-modal').classList.remove('hidden');
   }
 
   document.getElementById('confirm-cancel').addEventListener('click', () => {
-    pendingDeleteId = null;
     document.getElementById('confirm-modal').classList.add('hidden');
+    pendingDeleteIdx = null;
   });
 
   document.getElementById('confirm-delete').addEventListener('click', () => {
-    if (pendingDeleteId) deleteBacktest(pendingDeleteId);
-    pendingDeleteId = null;
+    if (pendingDeleteIdx !== null) {
+      savedResults.splice(pendingDeleteIdx, 1);
+      renderResultsList();
+    }
     document.getElementById('confirm-modal').classList.add('hidden');
+    pendingDeleteIdx = null;
   });
 
-  /* ---------- DATA TAB (still placeholder — no backend upload endpoint yet) ---------- */
-  document.getElementById('upload-btn').addEventListener('click', () => {
-    const fileInput = document.getElementById('data-upload');
-    if (fileInput.files.length === 0) return;
-    const fileName = fileInput.files[0].name;
-    const list = document.getElementById('data-file-list');
-    const row = document.createElement('div');
-    row.className = 'data-file-row';
-    row.innerHTML = `<span>${fileName}</span><span style="color:var(--text-muted);">(pending backend upload)</span>`;
-    list.appendChild(row);
-    fileInput.value = '';
-  });
-
-  /* ---------- INITIAL RENDER ---------- */
-  renderResults();
+  renderResultsList();
 });
