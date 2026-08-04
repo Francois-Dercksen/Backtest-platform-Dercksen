@@ -143,7 +143,7 @@
         <div class="formula">
           UpCapture = CAGR<sub>p</sub>(bm&gt;0) / CAGR<sub>bm</sub>(bm&gt;0) &nbsp;|&nbsp; DownCapture = CAGR<sub>p</sub>(bm&lt;0) / CAGR<sub>bm</sub>(bm&lt;0)
         </div>
-        <p class="formula-desc">How much of the benchmark's up-periods and down-periods the portfolio captures, computed by annualising portfolio and benchmark returns restricted to periods where the benchmark was positive (up) or negative (down).</p>
+        <p class="formula-desc">How much of the benchmark's up-periods and down-periods the portfolio captures.</p>
       </div>
 
       <div class="formula-card">
@@ -157,7 +157,7 @@
       <div class="formula-card">
         <h2>Net Gearing</h2>
         <div class="formula">Gearing<sub>t</sub> = &sum;<sub>legs</sub> capital_weight<sub>leg,t</sub></div>
-        <p class="formula-desc">Total fraction of $1 equity consumed across all capital-eligible legs (Long/Short Portfolio, Long Put, Long Call) in a given period. 1.0 = fully invested; above 1.0 means the excess is funded by borrowing; below 1.0 means idle cash is held. Short Call and Short Put are excluded from this calculation since no margin/collateral is modelled for them.</p>
+        <p class="formula-desc">Total fraction of $1 equity consumed across all capital-eligible legs (Long/Short Portfolio, Long Put, Long Call) in a given period. 1.0 = fully invested; above 1.0 means the excess is funded by borrowing; below 1.0 means idle cash is held. Short Call and Short Put are excluded since no margin/collateral is modelled for them.</p>
       </div>
 
       <div class="formula-card">
@@ -165,17 +165,17 @@
         <div class="formula">
           Financing<sub>t</sub> = &minus;(Gearing<sub>t</sub> &minus; 1) &middot; ((1 + RFR)<sup>months/12</sup> &minus; 1)
         </div>
-        <p class="formula-desc">Interest expense (if geared above 100%) or interest income (if holding uninvested cash below 100%), applied at the static risk-free rate, added directly into the Net Portfolio's period return.</p>
+        <p class="formula-desc">Interest expense (if geared above 100%) or interest income (if holding uninvested cash below 100%), applied at the static risk-free rate.</p>
       </div>
 
-      <div class="formula-section-title">Options Leg Mechanics (Long Put / Long Call / Short Call / Short Put)</div>
+      <div class="formula-section-title">Options Leg Mechanics</div>
 
       <div class="formula-card">
         <h2>Put Payoff / Call Payoff</h2>
         <div class="formula">
           Put: max(K &minus; S<sub>t</sub>, 0) &middot; N &nbsp;|&nbsp; Call: max(S<sub>t</sub> &minus; K, 0) &middot; N
         </div>
-        <p class="formula-desc">Intrinsic value at expiry, where K is the strike (relative to spot = 1) and S<sub>t</sub> is the benchmark index level at period end, and N is the position's notional.</p>
+        <p class="formula-desc">Intrinsic value at expiry, where K is the strike (relative to spot = 1), S<sub>t</sub> is the benchmark index level at period end, and N is the position's notional.</p>
       </div>
 
       <div class="formula-card">
@@ -183,7 +183,7 @@
         <div class="formula">
           Fixed: N = fixed_pct &nbsp;|&nbsp; Weight: N = weight_pct / premium_pct
         </div>
-        <p class="formula-desc">Fixed mode sizes notional as a set fraction of portfolio value each period (capital spent = N &middot; premium). Weight mode spends a fixed fraction of portfolio capital entirely on premium, so notional is backed out from that spend.</p>
+        <p class="formula-desc">Fixed mode sizes notional as a set fraction of portfolio value each period. Weight mode spends a fixed fraction of portfolio capital entirely on premium, backing out notional from that spend.</p>
       </div>
 
       <div class="formula-card">
