@@ -108,23 +108,27 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshPortfolioSelects();
 
   /* ---------- STRATEGY SHAPE / PAYOFF PREVIEW ----------
-     Long/Short Portfolio -> illustrative equity curve over time (unchanged).
+     Long/Short Portfolio -> illustrative equity curve over time.
      Option legs (long/short call/put) -> simulated payoff-at-maturity diagram:
        x-axis = spot price at maturity, expressed as % of spot at trade date.
        y-axis = P&L as % of notional, net of premium paid/received.
      Payoffs are computed directly from the strike/premium values entered
      in each leg's own fields, so the preview always reflects current inputs. */
   const PREVIEW_COLORS = {
-    'long-portfolio': '#0f4c81',
-    'short-portfolio': '#b3261e',
-    'long-call': '#1a8a5f',
-    'long-put': '#c98a1f',
-    'short-call': '#6b46c1',
-    'short-put': '#0e7490',
+    'long-portfolio': '#1f5fbf',   // blue
+    'short-portfolio': '#c0392b',  // red
+    'long-put': '#d4af17',         // yellow
+    'short-put': '#d4af17',        // yellow (dashed)
+    'long-call': '#1a8a5f',        // green
+    'short-call': '#1a8a5f',       // green (dashed)
+  };
+  const PREVIEW_DASH = {
+    'short-put': '7,5',
+    'short-call': '7,5',
   };
   const PORTFOLIO_LABELS = {
-    'long-portfolio': 'Long Portfolio (grows over time)',
-    'short-portfolio': 'Short Portfolio (declines over time)',
+    'long-portfolio': 'Long Portfolio',
+    'short-portfolio': 'Short Portfolio',
   };
 
   function parsePct(str, fallback) {
@@ -173,8 +177,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateStrategyPreview() {
     const svg = document.getElementById('strategy-preview-svg');
     const legend = document.getElementById('strategy-preview-legend');
-    const W = 600, H = 160;
-    const PAD_L = 42, PAD_R = 14, PAD_T = 14, PAD_B = 22;
+    const W = 600, H = 260;
+    const PAD_L = 42, PAD_R = 14, PAD_T = 16, PAD_B = 28;
 
     const activeItems = Array.from(document.querySelectorAll('.strategy-item')).filter(item => {
       const cb = item.querySelector('.strategy-toggle');
@@ -203,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           svgParts.push(`<path d="M${PAD_L},${H * 0.18} Q${W * 0.45},${H * 0.55} ${W - PAD_R},${H - 30}" fill="none" stroke="${color}" stroke-width="2.5"/>`);
         }
-        legendItems.push({ label: PORTFOLIO_LABELS[key], color });
+        legendItems.push({ label: PORTFOLIO_LABELS[key], color, dash: null });
       });
     }
 
@@ -214,6 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
           key,
           color: PREVIEW_COLORS[key],
+          dash: PREVIEW_DASH[key] || null,
           label: item.querySelector('.strategy-check span').textContent,
           ...p,
         };
@@ -248,30 +253,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (xMin <= 1 && 1 <= xMax) {
           svgParts.push(`<line x1="${xScale(1).toFixed(1)}" y1="${plotTop}" x2="${xScale(1).toFixed(1)}" y2="${plotBottom}" stroke="#9aa4b2" stroke-width="1" stroke-dasharray="3,3"/>`);
-          svgParts.push(`<text x="${xScale(1).toFixed(1)}" y="${plotBottom + 14}" font-size="9" fill="#6b7280" text-anchor="middle">100%</text>`);
+          svgParts.push(`<text x="${xScale(1).toFixed(1)}" y="${plotBottom + 16}" font-size="9" fill="#6b7280" text-anchor="middle">100%</text>`);
         }
-        svgParts.push(`<text x="${xScale(xMin).toFixed(1)}" y="${plotBottom + 14}" font-size="9" fill="#6b7280" text-anchor="start">${Math.round(xMin * 100)}%</text>`);
-        svgParts.push(`<text x="${xScale(xMax).toFixed(1)}" y="${plotBottom + 14}" font-size="9" fill="#6b7280" text-anchor="end">${Math.round(xMax * 100)}%</text>`);
+        svgParts.push(`<text x="${xScale(xMin).toFixed(1)}" y="${plotBottom + 16}" font-size="9" fill="#6b7280" text-anchor="start">${Math.round(xMin * 100)}%</text>`);
+        svgParts.push(`<text x="${xScale(xMax).toFixed(1)}" y="${plotBottom + 16}" font-size="9" fill="#6b7280" text-anchor="end">${Math.round(xMax * 100)}%</text>`);
         svgParts.push(`<text x="${PAD_L - 6}" y="${plotTop + 8}" font-size="9" fill="#6b7280" text-anchor="end">${(yMax * 100).toFixed(0)}%</text>`);
         svgParts.push(`<text x="${PAD_L - 6}" y="${plotBottom}" font-size="9" fill="#6b7280" text-anchor="end">${(yMin * 100).toFixed(0)}%</text>`);
-        svgParts.push(`<text x="${(PAD_L + W - PAD_R) / 2}" y="${H - 4}" font-size="9" fill="#6b7280" text-anchor="middle">Spot at maturity (% of spot now)</text>`);
+        svgParts.push(`<text x="${(PAD_L + W - PAD_R) / 2}" y="${H - 6}" font-size="9" fill="#6b7280" text-anchor="middle">Spot at maturity (% of spot now)</text>`);
 
         legs.forEach(l => {
           const xs = Array.from(new Set([xMin, l.strike, xMax])).sort((a, b) => a - b);
           const points = xs.map(x => `${xScale(x).toFixed(1)},${yScale(optionPayoff(l.key, x, l.strike, l.premium)).toFixed(1)}`).join(' ');
-          svgParts.push(`<polyline points="${points}" fill="none" stroke="${l.color}" stroke-width="2.5"/>`);
-          legendItems.push({
-            label: `${l.label} (K=${Math.round(l.strike * 100)}%, prem=${(l.premium * 100).toFixed(2)}%)`,
-            color: l.color,
-          });
+          const dashAttr = l.dash ? ` stroke-dasharray="${l.dash}"` : '';
+          svgParts.push(`<polyline points="${points}" fill="none" stroke="${l.color}" stroke-width="2.5"${dashAttr}/>`);
+          legendItems.push({ label: l.label, color: l.color, dash: l.dash });
         });
       }
     }
 
     svg.innerHTML = svgParts.join('');
-    legend.innerHTML = legendItems.map(li =>
-      `<span><span class="legend-swatch" style="background:${li.color};"></span>${li.label}</span>`
-    ).join('');
+    legend.innerHTML = legendItems.map(li => {
+      const swatchStyle = li.dash
+        ? `background:repeating-linear-gradient(to right, ${li.color} 0 5px, transparent 5px 9px);`
+        : `background:${li.color};`;
+      return `<span><span class="legend-swatch" style="${swatchStyle}"></span>${li.label}</span>`;
+    }).join('');
   }
 
   updateStrategyPreview();
