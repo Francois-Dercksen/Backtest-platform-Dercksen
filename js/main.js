@@ -55,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
     cb.addEventListener('change', () => {
       const item = cb.closest('.strategy-item');
       item.classList.toggle('expanded', cb.checked);
-      updateFlowDiagram();
       updateStrategyPreview();
     });
   });
@@ -108,48 +107,74 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   refreshPortfolioSelects();
 
-  /* ---------- FLOW DIAGRAM ---------- */
-  function updateFlowDiagram() {
-    const flow = document.getElementById('flow-diagram');
-    const selected = Array.from(document.querySelectorAll('.strategy-toggle:checked'))
-      .map(cb => cb.closest('.strategy-item').querySelector('span').textContent);
-
-    if (selected.length === 0) {
-      flow.innerHTML = '<p class="placeholder-text">Flow diagram will render here once a strategy is selected.</p>';
-      return;
-    }
-
-    flow.innerHTML = selected.map(name =>
-      `<div style="padding:0.7rem 1.2rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);margin:0 0.5rem;font-size:0.88rem;font-weight:600;color:var(--accent);">${name}</div>`
-    ).join('<span style="color:var(--text-muted);font-size:1.2rem;">&rarr;</span>');
-  }
-
-  /* ---------- STRATEGY SHAPE PREVIEW (illustrative only, not quantitative) ----------
-     long_portfolio  -> upward curve
-     short_portfolio -> downward curve
-     long_call/put   -> horizontal dashed line at strike level
-     short_call/put  -> horizontal dotted line at premium level          */
+  /* ---------- STRATEGY SHAPE / PAYOFF PREVIEW ----------
+     Long/Short Portfolio -> illustrative equity curve over time (unchanged).
+     Option legs (long/short call/put) -> simulated payoff-at-maturity diagram:
+       x-axis = spot price at maturity, expressed as % of spot at trade date.
+       y-axis = P&L as % of notional, net of premium paid/received.
+     Payoffs are computed directly from the strike/premium values entered
+     in each leg's own fields, so the preview always reflects current inputs. */
   const PREVIEW_COLORS = {
     'long-portfolio': '#0f4c81',
     'short-portfolio': '#b3261e',
     'long-call': '#1a8a5f',
-    'long-put': '#1a8a5f',
+    'long-put': '#c98a1f',
     'short-call': '#6b46c1',
-    'short-put': '#6b46c1',
+    'short-put': '#0e7490',
   };
-  const PREVIEW_LABELS = {
+  const PORTFOLIO_LABELS = {
     'long-portfolio': 'Long Portfolio (grows over time)',
     'short-portfolio': 'Short Portfolio (declines over time)',
-    'long-call': 'Long Call (flat at strike)',
-    'long-put': 'Long Put (flat at strike)',
-    'short-call': 'Short Call (flat at premium)',
-    'short-put': 'Short Put (flat at premium)',
   };
+
+  function parsePct(str, fallback) {
+    if (str === undefined || str === null || str === '') return fallback;
+    const n = parseFloat(String(str).replace('%', '').trim());
+    return isNaN(n) ? fallback : n / 100;
+  }
+
+  function optionLegParams(key, item) {
+    switch (key) {
+      case 'long-call':
+        return {
+          strike: parsePct(item.querySelector('.call-strike')?.value, 1.0),
+          premium: parsePct(item.querySelector('.call-premium')?.value, 0),
+        };
+      case 'short-call':
+        return {
+          strike: parsePct(item.querySelector('.short-call-strike')?.value, 1.2),
+          premium: parsePct(item.querySelector('.short-call-premium')?.value, 0),
+        };
+      case 'long-put':
+        return {
+          strike: parsePct(item.querySelector('.put-strike')?.value, 0.9),
+          premium: parsePct(item.querySelector('.put-premium')?.value, 0),
+        };
+      case 'short-put':
+        return {
+          strike: parsePct(item.querySelector('.short-put-strike')?.value, 0.9),
+          premium: parsePct(item.querySelector('.short-put-premium')?.value, 0),
+        };
+      default:
+        return null;
+    }
+  }
+
+  function optionPayoff(key, x, strike, premium) {
+    switch (key) {
+      case 'long-call': return Math.max(x - strike, 0) - premium;
+      case 'short-call': return premium - Math.max(x - strike, 0);
+      case 'long-put': return Math.max(strike - x, 0) - premium;
+      case 'short-put': return premium - Math.max(strike - x, 0);
+      default: return 0;
+    }
+  }
 
   function updateStrategyPreview() {
     const svg = document.getElementById('strategy-preview-svg');
     const legend = document.getElementById('strategy-preview-legend');
-    const W = 600, H = 160, PAD = 20;
+    const W = 600, H = 160;
+    const PAD_L = 42, PAD_R = 14, PAD_T = 14, PAD_B = 22;
 
     const activeItems = Array.from(document.querySelectorAll('.strategy-item')).filter(item => {
       const cb = item.querySelector('.strategy-toggle');
@@ -157,42 +182,98 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (activeItems.length === 0) {
-      svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" font-size="12" fill="#6b7280">Select a strategy above to preview its shape</text>`;
+      svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="12" fill="#6b7280">Select a strategy above to preview its shape</text>`;
       legend.innerHTML = '';
       return;
     }
 
-    let svgParts = [`<line x1="${PAD}" y1="${H-15}" x2="${W-PAD}" y2="${H-15}" stroke="#e3e6ea" stroke-width="1"/>`];
-    let dashedCount = 0, dottedCount = 0;
+    const portfolioItems = activeItems.filter(i => ['long-portfolio', 'short-portfolio'].includes(i.dataset.strategy));
+    const optionItems = activeItems.filter(i => ['long-call', 'short-call', 'long-put', 'short-put'].includes(i.dataset.strategy));
+
+    const svgParts = [];
     const legendItems = [];
 
-    activeItems.forEach(item => {
-      const key = item.dataset.strategy;
-      const color = PREVIEW_COLORS[key] || '#6b7280';
+    if (portfolioItems.length > 0) {
+      svgParts.push(`<line x1="${PAD_L}" y1="${H - 15}" x2="${W - PAD_R}" y2="${H - 15}" stroke="#e3e6ea" stroke-width="1"/>`);
+      portfolioItems.forEach(item => {
+        const key = item.dataset.strategy;
+        const color = PREVIEW_COLORS[key];
+        if (key === 'long-portfolio') {
+          svgParts.push(`<path d="M${PAD_L},${H - 30} Q${W * 0.45},${H * 0.55} ${W - PAD_R},${H * 0.18}" fill="none" stroke="${color}" stroke-width="2.5"/>`);
+        } else {
+          svgParts.push(`<path d="M${PAD_L},${H * 0.18} Q${W * 0.45},${H * 0.55} ${W - PAD_R},${H - 30}" fill="none" stroke="${color}" stroke-width="2.5"/>`);
+        }
+        legendItems.push({ label: PORTFOLIO_LABELS[key], color });
+      });
+    }
 
-      if (key === 'long-portfolio') {
-        svgParts.push(`<path d="M${PAD},${H-30} Q${W*0.45},${H*0.55} ${W-PAD},${H*0.18}" fill="none" stroke="${color}" stroke-width="2.5"/>`);
-      } else if (key === 'short-portfolio') {
-        svgParts.push(`<path d="M${PAD},${H*0.18} Q${W*0.45},${H*0.55} ${W-PAD},${H-30}" fill="none" stroke="${color}" stroke-width="2.5"/>`);
-      } else if (key === 'long-call' || key === 'long-put') {
-        const y = 40 + dashedCount * 18;
-        dashedCount++;
-        svgParts.push(`<line x1="${PAD}" y1="${y}" x2="${W-PAD}" y2="${y}" stroke="${color}" stroke-width="2" stroke-dasharray="8,5"/>`);
-      } else if (key === 'short-call' || key === 'short-put') {
-        const y = 100 + dottedCount * 18;
-        dottedCount++;
-        svgParts.push(`<line x1="${PAD}" y1="${y}" x2="${W-PAD}" y2="${y}" stroke="${color}" stroke-width="2" stroke-dasharray="2,4"/>`);
+    if (optionItems.length > 0) {
+      const legs = optionItems.map(item => {
+        const key = item.dataset.strategy;
+        const p = optionLegParams(key, item);
+        return {
+          key,
+          color: PREVIEW_COLORS[key],
+          label: item.querySelector('.strategy-check span').textContent,
+          ...p,
+        };
+      }).filter(l => l.strike !== null && l.strike !== undefined && !isNaN(l.strike));
+
+      if (legs.length > 0) {
+        let xMin = 0.5, xMax = 1.5;
+        legs.forEach(l => {
+          xMin = Math.min(xMin, l.strike - 0.15);
+          xMax = Math.max(xMax, l.strike + 0.15);
+        });
+
+        const xScale = x => PAD_L + ((x - xMin) / (xMax - xMin)) * (W - PAD_L - PAD_R);
+
+        let yMin = 0, yMax = 0;
+        const sampleXs = Array.from(new Set([xMin, xMax, ...legs.map(l => l.strike)]));
+        legs.forEach(l => {
+          sampleXs.forEach(sx => {
+            const y = optionPayoff(l.key, sx, l.strike, l.premium);
+            yMin = Math.min(yMin, y);
+            yMax = Math.max(yMax, y);
+          });
+        });
+        if (yMin === yMax) { yMin -= 0.05; yMax += 0.05; }
+        const yPad = (yMax - yMin) * 0.15;
+        yMin -= yPad; yMax += yPad;
+
+        const plotTop = PAD_T, plotBottom = H - PAD_B;
+        const yScale = y => plotBottom - ((y - yMin) / (yMax - yMin)) * (plotBottom - plotTop);
+
+        svgParts.push(`<line x1="${PAD_L}" y1="${yScale(0).toFixed(1)}" x2="${W - PAD_R}" y2="${yScale(0).toFixed(1)}" stroke="#cbd2d9" stroke-width="1"/>`);
+
+        if (xMin <= 1 && 1 <= xMax) {
+          svgParts.push(`<line x1="${xScale(1).toFixed(1)}" y1="${plotTop}" x2="${xScale(1).toFixed(1)}" y2="${plotBottom}" stroke="#9aa4b2" stroke-width="1" stroke-dasharray="3,3"/>`);
+          svgParts.push(`<text x="${xScale(1).toFixed(1)}" y="${plotBottom + 14}" font-size="9" fill="#6b7280" text-anchor="middle">100%</text>`);
+        }
+        svgParts.push(`<text x="${xScale(xMin).toFixed(1)}" y="${plotBottom + 14}" font-size="9" fill="#6b7280" text-anchor="start">${Math.round(xMin * 100)}%</text>`);
+        svgParts.push(`<text x="${xScale(xMax).toFixed(1)}" y="${plotBottom + 14}" font-size="9" fill="#6b7280" text-anchor="end">${Math.round(xMax * 100)}%</text>`);
+        svgParts.push(`<text x="${PAD_L - 6}" y="${plotTop + 8}" font-size="9" fill="#6b7280" text-anchor="end">${(yMax * 100).toFixed(0)}%</text>`);
+        svgParts.push(`<text x="${PAD_L - 6}" y="${plotBottom}" font-size="9" fill="#6b7280" text-anchor="end">${(yMin * 100).toFixed(0)}%</text>`);
+        svgParts.push(`<text x="${(PAD_L + W - PAD_R) / 2}" y="${H - 4}" font-size="9" fill="#6b7280" text-anchor="middle">Spot at maturity (% of spot now)</text>`);
+
+        legs.forEach(l => {
+          const xs = Array.from(new Set([xMin, l.strike, xMax])).sort((a, b) => a - b);
+          const points = xs.map(x => `${xScale(x).toFixed(1)},${yScale(optionPayoff(l.key, x, l.strike, l.premium)).toFixed(1)}`).join(' ');
+          svgParts.push(`<polyline points="${points}" fill="none" stroke="${l.color}" stroke-width="2.5"/>`);
+          legendItems.push({
+            label: `${l.label} (K=${Math.round(l.strike * 100)}%, prem=${(l.premium * 100).toFixed(2)}%)`,
+            color: l.color,
+          });
+        });
       }
-      legendItems.push({ key, color });
-    });
+    }
 
     svg.innerHTML = svgParts.join('');
     legend.innerHTML = legendItems.map(li =>
-      `<span><span class="legend-swatch" style="background:${li.color};"></span>${PREVIEW_LABELS[li.key]}</span>`
+      `<span><span class="legend-swatch" style="background:${li.color};"></span>${li.label}</span>`
     ).join('');
   }
 
-  updateFlowDiagram();
   updateStrategyPreview();
 
   /* ---------- COLLECT LEGS FROM UI ---------- */
