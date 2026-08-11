@@ -354,6 +354,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return legs;
   }
 
+  /* ---------- CUSTOM PORTFOLIO CSVs REFERENCED BY ACTIVE LEGS ----------
+     Only send the CSV text for portfolios actually selected by an enabled
+     Long/Short Portfolio leg this run -- keeps the request payload small and
+     avoids uploading every saved portfolio on every backtest. Nothing is
+     stored server-side; the backend parses these in-memory for this run only. */
+  function collectReferencedCustomPortfolios(legs) {
+    const referencedNames = new Set(
+      legs
+        .filter(l => l.type === 'long_portfolio' || l.type === 'short_portfolio')
+        .map(l => l.params.portfolio)
+        .filter(name => name && name !== 'BAM_f7_default')
+    );
+    const payload = {};
+    referencedNames.forEach(name => {
+      const match = customPortfolios.find(p => p.name === name);
+      if (match) payload[name] = match.csvText;
+    });
+    return payload;
+  }
+
   /* ---------- RUN BACKTEST ---------- */
   const runBtn = document.getElementById('run-backtest-btn');
   const runStatus = document.getElementById('run-status');
@@ -379,6 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
       end_date: document.getElementById('end-date').value.trim(),
       risk_free_rate: document.getElementById('risk-free-rate').value.trim(),
       legs,
+      custom_portfolios: collectReferencedCustomPortfolios(legs),
     };
 
     showStatus('Running backtest...', false, true);
