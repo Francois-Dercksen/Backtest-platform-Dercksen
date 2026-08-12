@@ -33,7 +33,7 @@
           <ul>
             <li>Combine legs freely: run one strategy alone or stack several together.</li>
             <li>Capital is tracked automatically — spending more than 100% of the portfolio triggers borrowing at the risk-free rate; holding less than 100% earns interest.</li>
-            <li>Every backtest produces a full report: returns, drawdown, benchmark comparison, gearing, and a per-strategy breakdown.</li>
+            <li>Every backtest produces a full report: returns, drawdown, benchmark comparison, gearing, fees, and a per-strategy breakdown.</li>
           </ul>
           <p>Start on the <strong>Backtest</strong> tab, pick your legs, and run.</p>
         </div>
@@ -177,7 +177,7 @@
       <div class="formula-card">
         <h2>Net Gearing</h2>
         <div class="formula">Gearing<sub>t</sub> = &sum;<sub>legs</sub> capital_weight<sub>leg,t</sub></div>
-        <p class="formula-desc">Total fraction of $1 equity consumed across all capital-eligible legs (Long/Short Portfolio, Long Put, Long Call) in a given period. 1.0 = fully invested; above 1.0 means the excess is funded by borrowing; below 1.0 means idle cash is held. Short Call and Short Put are excluded since no margin/collateral is modelled for them.</p>
+        <p class="formula-desc">Total fraction of $1 equity consumed across all capital-eligible legs (Long/Short Portfolio, Long Put, Long Call) in a given period. 1.0 = fully invested; above 1.0 means the excess is funded by borrowing; below 1.0 means idle cash is held.</p>
       </div>
 
       <div class="formula-card">
@@ -186,6 +186,20 @@
           Financing<sub>t</sub> = &minus;(Gearing<sub>t</sub> &minus; 1) &middot; ((1 + RFR)<sup>months/12</sup> &minus; 1)
         </div>
         <p class="formula-desc">Interest expense (if geared above 100%) or interest income (if holding uninvested cash below 100%), applied at the static risk-free rate.</p>
+      </div>
+
+      <div class="formula-section-title">Fees</div>
+
+      <div class="formula-card">
+        <h2>Management Fee</h2>
+        <div class="formula">MgmtFee<sub>t</sub> = AUM<sub>t,pre-fee</sub> &middot; ((1 + f<sub>mgmt</sub>)<sup>months/12</sup> &minus; 1)</div>
+        <p class="formula-desc">An annual rate, compounded to the period length, deducted from that period's pre-fee ending AUM. Charged first, every period.</p>
+      </div>
+
+      <div class="formula-card">
+        <h2>Performance Fee</h2>
+        <div class="formula">PerfFee<sub>t</sub> = max(R<sub>t,after mgmt</sub> &minus; R<sub>bm,t</sub>, 0) &middot; f<sub>perf</sub> &middot; AUM<sub>t&minus;1</sub></div>
+        <p class="formula-desc">Charged only when the return after the management fee beats the selected benchmark (SPX, risk-free rate, or a custom annual rate) that period. No high-water mark, no clawback — each period assessed independently.</p>
       </div>
 
       <div class="formula-section-title">Options Leg Mechanics</div>
@@ -241,6 +255,32 @@
           <div class="field-row">
             <label for="risk-free-rate">Risk Free Rate</label>
             <input type="text" id="risk-free-rate" placeholder="e.g. 4.5%" value="4.5%">
+          </div>
+        </div>
+
+        <div class="fees-section">
+          <h3>Fees</h3>
+          <div class="global-params fees-params">
+            <div class="field-row">
+              <label for="management-fee">Management Fee (% p.a. of AUM)</label>
+              <input type="text" id="management-fee" placeholder="e.g. 1%" value="1%">
+            </div>
+            <div class="field-row">
+              <label for="performance-fee">Performance Fee (% of excess return)</label>
+              <input type="text" id="performance-fee" placeholder="e.g. 20%" value="20%">
+            </div>
+            <div class="field-row">
+              <label for="perf-benchmark-type">Performance Benchmark</label>
+              <select id="perf-benchmark-type">
+                <option value="spx" selected>SPX</option>
+                <option value="rfr">Risk Free Rate</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row perf-benchmark-custom-row" style="display:none;">
+            <label for="perf-benchmark-custom">Custom Benchmark Rate (% p.a.)</label>
+            <input type="text" id="perf-benchmark-custom" placeholder="e.g. 5%">
           </div>
         </div>
 
