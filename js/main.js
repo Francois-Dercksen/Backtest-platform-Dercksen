@@ -440,4 +440,341 @@ document.addEventListener('DOMContentLoaded', () => {
           key: 'long_portfolio', type: 'long_portfolio', label, enabled: true,
           params: {
             weight: item.querySelector('.lp-weight')?.value || '100%',
-            portfolio: item.querySelector('.portfolio-select')?.value || 'BAM
+            portfolio: item.querySelector('.portfolio-select')?.value || 'BAM_f7_default',
+          },
+        });
+      } else if (stratKey === 'short-portfolio') {
+        legs.push({
+          key: 'short_portfolio', type: 'short_portfolio', label, enabled: true,
+          params: {
+            weight: item.querySelector('.sp-weight')?.value || '100%',
+            portfolio: item.querySelector('.portfolio-select')?.value || 'BAM_f7_default',
+          },
+        });
+      } else if (stratKey === 'long-put') {
+        legs.push({
+          key: 'long_put', type: 'long_put', label, enabled: true,
+          params: {
+            strike: item.querySelector('.put-strike')?.value || '90%',
+            premium: item.querySelector('.put-premium')?.value || '4%',
+            notional_method: item.querySelector('.put-notional-method')?.value || 'real-beta',
+            custom_beta: item.querySelector('.put-custom-beta')?.value || '',
+          },
+        });
+      } else if (stratKey === 'long-call') {
+        legs.push({
+          key: 'long_call', type: 'long_call', label, enabled: true,
+          params: {
+            strike: item.querySelector('.call-strike')?.value || '100%',
+            premium: item.querySelector('.call-premium')?.value || '9%',
+            sizing_mode: item.querySelector('.call-sizing-mode')?.value || 'weight',
+            fixed_pct: item.querySelector('.call-fixed-pct')?.value || '10%',
+            weight_pct: item.querySelector('.call-weight-pct')?.value || '5%',
+          },
+        });
+      } else if (stratKey === 'short-call') {
+        legs.push({
+          key: 'short_call', type: 'short_call', label, enabled: true,
+          params: {
+            strike: item.querySelector('.short-call-strike')?.value || '120%',
+            premium: item.querySelector('.short-call-premium')?.value || '1.3%',
+            notional: item.querySelector('.short-call-notional')?.value || '100%',
+          },
+        });
+      } else if (stratKey === 'short-put') {
+        legs.push({
+          key: 'short_put', type: 'short_put', label, enabled: true,
+          params: {
+            strike: item.querySelector('.short-put-strike')?.value || '90%',
+            premium: item.querySelector('.short-put-premium')?.value || '4.19%',
+            notional: item.querySelector('.short-put-notional')?.value || '100%',
+          },
+        });
+      }
+    });
+
+    return legs;
+  }
+
+  /* ---------- CUSTOM PORTFOLIO CSVs REFERENCED BY ACTIVE LEGS ----------
+     Only send the CSV text for portfolios actually selected by an enabled
+     Long/Short Portfolio leg this run -- keeps the request payload small and
+     avoids uploading every saved portfolio on every backtest. Nothing is
+     stored server-side; the backend parses these in-memory for this run only. */
+  function collectReferencedCustomPortfolios(legs) {
+    const referencedNames = new Set(
+      legs
+        .filter(l => l.type === 'long_portfolio' || l.type === 'short_portfolio')
+        .map(l => l.params.portfolio)
+        .filter(name => name && name !== 'BAM_f7_default')
+    );
+    const payload = {};
+    referencedNames.forEach(name => {
+      const match = customPortfolios.find(p => p.name === name);
+      if (match) payload[name] = match.csvText;
+    });
+    return payload;
+  }
+
+  /* ---------- COLLECT FEE CONFIG FROM UI ---------- */
+  function collectFees() {
+    const benchmarkType = perfBenchmarkType.value || 'spx';
+    const fees = {
+      management_fee: document.getElementById('management-fee').value.trim() || '1%',
+      performance_fee: document.getElementById('performance-fee').value.trim() || '20%',
+      benchmark_type: benchmarkType,
+    };
+    if (benchmarkType === 'custom') {
+      fees.custom_rate = document.getElementById('perf-benchmark-custom').value.trim() || '0%';
+    }
+    return fees;
+  }
+
+  /* ---------- RUN BACKTEST ---------- */
+  const runBtn = document.getElementById('run-backtest-btn');
+  const runStatus = document.getElementById('run-status');
+  const viewResultBtn = document.getElementById('view-result-btn');
+
+  function showStatus(msg, isError, showSpinner) {
+    runStatus.innerHTML = (showSpinner ? '<span class="spinner"></span>' : '') + msg;
+    runStatus.style.color = isError ? 'var(--danger)' : 'var(--text-muted)';
+  }
+
+  runBtn.addEventListener('click', async () => {
+    const name = document.getElementById('backtest-name').value.trim();
+    const legs = collectLegs();
+
+    viewResultBtn.classList.remove('show');
+
+    if (!name) { showStatus('Please enter a backtest name.', true, false); return; }
+    if (legs.length === 0) { showStatus('Select at least one strategy.', true, false); return; }
+
+    const validationErrors = validateAllFields();
+    if (validationErrors.length > 0) {
+      showStatus(validationErrors[0] + (validationErrors.length > 1 ? ` (+${validationErrors.length - 1} more)` : ''), true, false);
+      return;
+    }
+
+    const payload = {
+      name,
+      start_date: document.getElementById('start-date').value.trim(),
+      end_date: document.getElementById('end-date').value.trim(),
+      risk_free_rate: document.getElementById('risk-free-rate').value.trim(),
+      legs,
+      custom_portfolios: collectReferencedCustomPortfolios(legs),
+      fees: collectFees(),
+    };
+
+    showStatus('Running backtest...', false, true);
+    runBtn.disabled = true;
+
+    try {
+      const res = await fetch(`${RENDER_API_URL}/api/backtest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showStatus(data.error || 'Backtest failed.', true, false);
+        return;
+      }
+
+      data.created_at = new Date().toISOString();
+      savedResults.push(data);
+      persistResults();
+      latestResultIdx = savedResults.length - 1;
+      renderResultsList();
+      showStatus('Backtest complete.', false, false);
+      viewResultBtn.classList.add('show');
+    } catch (err) {
+      showStatus('Network error: ' + err.message, true, false);
+    } finally {
+      runBtn.disabled = false;
+    }
+  });
+
+  viewResultBtn.addEventListener('click', () => {
+    if (latestResultIdx !== null && savedResults[latestResultIdx]) {
+      openDashboard(savedResults[latestResultIdx]);
+    }
+  });
+
+  /* ---------- RESULTS LIST: accordion rows (matches .result-row-main / .result-caret / .result-details) ---------- */
+  function fmtPct(v) {
+    return (v === null || v === undefined || isNaN(v)) ? '--' : (v * 100).toFixed(2) + '%';
+  }
+  function fmtNum(v) {
+    return (v === null || v === undefined || isNaN(v)) ? '--' : Number(v).toFixed(2);
+  }
+
+  function renderResultsList() {
+    const list = document.getElementById('results-list');
+    const empty = document.getElementById('results-empty');
+
+    if (savedResults.length === 0) {
+      list.innerHTML = '';
+      list.appendChild(empty);
+      return;
+    }
+
+    list.innerHTML = '';
+    savedResults.forEach((r, idx) => {
+      const m = (r.net && r.net.metrics) || {};
+      const legLabels = Object.values(r.legs || {}).map(l => l.label).join(', ') || '--';
+
+      const row = document.createElement('div');
+      row.className = 'result-row';
+      row.innerHTML = `
+        <div class="result-row-main" data-idx="${idx}">
+          <button class="result-caret" tabindex="-1">&#9656;</button>
+          <div class="result-name">
+            ${r.name}
+            <div class="result-tags">${legLabels}</div>
+          </div>
+          <div class="result-actions">
+            <button class="btn-secondary view-btn" data-idx="${idx}">View Report</button>
+            <button class="btn-secondary download-btn" data-idx="${idx}">Download HTML</button>
+            <button class="btn-danger delete-btn" data-idx="${idx}">Delete</button>
+          </div>
+        </div>
+        <div class="result-details">
+          <dl>
+            <dt>CAGR</dt><dd>${fmtPct(m.annualised_return)}</dd>
+            <dt>Sharpe Ratio</dt><dd>${fmtNum(m.sharpe)}</dd>
+            <dt>Sortino Ratio</dt><dd>${fmtNum(m.sortino)}</dd>
+            <dt>Max Drawdown</dt><dd>${fmtPct(m.max_drawdown)}</dd>
+            <dt>Calmar Ratio</dt><dd>${fmtNum(m.calmar)}</dd>
+            <dt>Hit Rate</dt><dd>${fmtPct(m.hit_rate)}</dd>
+            <dt>VaR (95%)</dt><dd>${fmtPct(m.var_95)}</dd>
+            <dt>Backtest Length</dt><dd>${m.n_periods ?? '--'} periods</dd>
+            <dt>Avg Turnover</dt><dd>${fmtPct(m.avg_turnover)}</dd>
+          </dl>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+
+    list.querySelectorAll('.result-row-main').forEach(main => {
+      main.addEventListener('click', (e) => {
+        if (e.target.closest('button') && !e.target.closest('.result-caret')) return;
+        main.closest('.result-row').classList.toggle('expanded');
+      });
+    });
+    list.querySelectorAll('.view-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); openDashboard(savedResults[parseInt(btn.dataset.idx, 10)]); });
+    });
+    list.querySelectorAll('.download-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); downloadReportHtml(savedResults[parseInt(btn.dataset.idx, 10)]); });
+    });
+    list.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); confirmDelete(parseInt(btn.dataset.idx, 10)); });
+    });
+  }
+
+  function openDashboard(result) {
+    const modal = document.getElementById('dashboard-modal');
+    const frame = document.getElementById('dashboard-frame');
+    frame.srcdoc = result.dashboard_html
+      || '<p style="padding:2rem;font-family:sans-serif;">Report not available for this backtest.</p>';
+    modal.classList.remove('hidden');
+  }
+
+  function downloadReportHtml(result) {
+    if (!result.dashboard_html) {
+      alert('No report available to download for this backtest.');
+      return;
+    }
+    const blob = new Blob([result.dashboard_html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = (result.name || 'backtest_report').replace(/[^a-z0-9_\-]+/gi, '_');
+    a.download = `${safeName}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('modal-close-btn').addEventListener('click', () => {
+    document.getElementById('dashboard-modal').classList.add('hidden');
+  });
+
+  function confirmDelete(idx) {
+    pendingDeleteIdx = idx;
+    document.getElementById('confirm-message').textContent =
+      `Are you sure you want to delete "${savedResults[idx].name}"?`;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+  }
+
+  document.getElementById('confirm-cancel').addEventListener('click', () => {
+    document.getElementById('confirm-modal').classList.add('hidden');
+    pendingDeleteIdx = null;
+  });
+
+  document.getElementById('confirm-delete').addEventListener('click', () => {
+    if (pendingDeleteIdx !== null) {
+      savedResults.splice(pendingDeleteIdx, 1);
+      persistResults();
+      renderResultsList();
+    }
+    document.getElementById('confirm-modal').classList.add('hidden');
+    pendingDeleteIdx = null;
+  });
+
+  /* ---------- DATA TAB: custom portfolio upload ---------- */
+  function renderCustomPortfolioList() {
+    const container = document.getElementById('custom-portfolio-list');
+    if (customPortfolios.length === 0) {
+      container.innerHTML = '<p class="placeholder-text">No custom portfolios uploaded yet.</p>';
+      return;
+    }
+    container.innerHTML = customPortfolios.map((p, idx) => `
+      <div class="portfolio-list-row">
+        <span>${p.name} <span class="tag">(${p.filename})</span></span>
+        <button class="btn-danger delete-portfolio-btn" data-idx="${idx}">Remove</button>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.delete-portfolio-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        customPortfolios.splice(parseInt(btn.dataset.idx, 10), 1);
+        persistPortfolios();
+        renderCustomPortfolioList();
+        refreshPortfolioSelects();
+      });
+    });
+  }
+
+  document.getElementById('upload-btn').addEventListener('click', () => {
+    const fileInput = document.getElementById('data-upload');
+    const nameInput = document.getElementById('custom-portfolio-name');
+    const file = fileInput.files[0];
+    const name = nameInput.value.trim();
+
+    if (!file) { alert('Choose a CSV file first.'); return; }
+    if (!name) { alert('Give this portfolio a name.'); return; }
+    if (customPortfolios.some(p => p.name === name)) { alert('A portfolio with this name already exists.'); return; }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      customPortfolios.push({
+        name,
+        filename: file.name,
+        csvText: e.target.result,
+        uploadedAt: new Date().toISOString(),
+      });
+      persistPortfolios();
+      renderCustomPortfolioList();
+      refreshPortfolioSelects();
+      fileInput.value = '';
+      nameInput.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  renderCustomPortfolioList();
+  renderResultsList();
+});
