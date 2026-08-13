@@ -278,6 +278,12 @@ h2 {
   background: var(--bg-alt);
 }
 
+.field-row input.invalid,
+.field-row select.invalid {
+  border-color: var(--danger);
+  background: var(--danger-light);
+}
+
 .field-row input:focus {
   outline: none;
   border-color: var(--accent);
