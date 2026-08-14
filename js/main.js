@@ -560,6 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
       start_date: document.getElementById('start-date').value.trim(),
       end_date: document.getElementById('end-date').value.trim(),
       risk_free_rate: document.getElementById('risk-free-rate').value.trim(),
+      frequency: document.getElementById('rebalance-frequency').value,
       legs,
       custom_portfolios: collectReferencedCustomPortfolios(legs),
       fees: collectFees(),
